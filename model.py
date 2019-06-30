@@ -6,8 +6,6 @@ import torch.nn as nn
 
 from typing import Any, Dict
 
-from senet import se_resnext50_32x4d
-
 IN_KERNEL = os.environ.get('KAGGLE_WORKING_DIR') is not None
 
 if not IN_KERNEL:
@@ -18,15 +16,6 @@ else:
 
 def create_model(config: Any, pretrained: bool) -> Any:
     dropout = config.model.dropout
-
-    # support the deprecated model
-    if config.version == '2b_se_resnext50':
-        model = se_resnext50_32x4d(pretrained='imagenet' if pretrained else None)
-        model.avg_pool = nn.AdaptiveAvgPool2d(1)
-        model.last_linear = nn.Linear(model.last_linear.in_features, config.model.num_classes)
-
-        model = torch.nn.DataParallel(model)
-        return model
 
     if not IN_KERNEL:
         model = get_model(config.model.arch, pretrained=pretrained)

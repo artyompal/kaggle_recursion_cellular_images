@@ -41,7 +41,6 @@ from metrics import F_score
 from random_rect_crop import RandomRectCrop
 from random_erase import RandomErase
 from model import create_model, freeze_layers, unfreeze_layers
-from cosine_scheduler import CosineLRWithRestarts
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 IN_KERNEL = os.environ.get('KAGGLE_WORKING_DIR') is not None
@@ -359,9 +358,9 @@ def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
         if is_scheduler_continuous(lr_scheduler):
             lr_scheduler.step()
             lr_str = f'\tlr {get_lr(optimizer):.02e}'
-        elif is_scheduler_continuous(lr_scheduler2):
-            lr_scheduler2.step()
-            lr_str = f'\tlr {get_lr(optimizer):.08f}'
+        # elif is_scheduler_continuous(lr_scheduler2):
+        #     lr_scheduler2.step()
+        #     lr_str = f'\tlr {get_lr(optimizer):.08f}'
 
         batch_time.update(time.time() - end)
         end = time.time()
@@ -527,24 +526,24 @@ def run() -> float:
         elif 'base_lr' in config.scheduler.params:
             set_lr(optimizer, config.scheduler.params.base_lr)
 
-    if not args.cosine:
-        lr_scheduler = get_scheduler(config.scheduler, optimizer, last_epoch=
-                                     (last_epoch if config.scheduler.name != 'cyclic_lr' else -1))
-        assert config.scheduler2.name == ''
-        lr_scheduler2 = get_scheduler(config.scheduler2, optimizer, last_epoch=last_epoch) \
-                        if config.scheduler2.name else None
-    else:
-        epoch_size = min(len(train_loader), config.train.max_steps_per_epoch) \
-                     * config.train.batch_size
-
-        set_lr(optimizer, float(config.cosine.start_lr))
-        lr_scheduler = CosineLRWithRestarts(optimizer,
-                                            batch_size=config.train.batch_size,
-                                            epoch_size=epoch_size,
-                                            restart_period=config.cosine.period,
-                                            period_inc=config.cosine.period_inc,
-                                            max_period=config.cosine.max_period)
-        lr_scheduler2 = None
+    # if not args.cosine:
+    lr_scheduler = get_scheduler(config.scheduler, optimizer, last_epoch=
+                                 (last_epoch if config.scheduler.name != 'cyclic_lr' else -1))
+    #     assert config.scheduler2.name == ''
+    #     lr_scheduler2 = get_scheduler(config.scheduler2, optimizer, last_epoch=last_epoch) \
+    #                     if config.scheduler2.name else None
+    # else:
+    #     epoch_size = min(len(train_loader), config.train.max_steps_per_epoch) \
+    #                  * config.train.batch_size
+    #
+    #     set_lr(optimizer, float(config.cosine.start_lr))
+    #     lr_scheduler = CosineLRWithRestarts(optimizer,
+    #                                         batch_size=config.train.batch_size,
+    #                                         epoch_size=epoch_size,
+    #                                         restart_period=config.cosine.period,
+    #                                         period_inc=config.cosine.period_inc,
+    #                                         max_period=config.cosine.max_period)
+    #     lr_scheduler2 = None
 
     if args.predict_oof or args.predict_test:
         print('inference mode')
@@ -568,7 +567,7 @@ def run() -> float:
     for epoch in range(last_epoch + 1, config.train.num_epochs):
         logger.info('-' * 50)
 
-        if not is_scheduler_continuous(lr_scheduler) and lr_scheduler2 is None:
+        if not is_scheduler_continuous(lr_scheduler): # and lr_scheduler2 is None:
             # if we have just reduced LR, reload the best saved model
             lr = get_lr(optimizer)
 
@@ -593,14 +592,14 @@ def run() -> float:
                                          coeff=total_coeff, last_epoch=-1)
                                          # (last_epoch if config.scheduler.name != 'cyclic_lr' else -1))
 
-        if isinstance(lr_scheduler, CosineLRWithRestarts):
-            restart = lr_scheduler.epoch_step()
-            if restart:
-                logger.info('cosine annealing restarted, resetting the best metric')
-                best_score = min(config.cosine.min_metric_val, best_score)
+        # if isinstance(lr_scheduler, CosineLRWithRestarts):
+        #     restart = lr_scheduler.epoch_step()
+        #     if restart:
+        #         logger.info('cosine annealing restarted, resetting the best metric')
+        #         best_score = min(config.cosine.min_metric_val, best_score)
 
         train_epoch(train_loader, model, criterion, optimizer, epoch,
-                    lr_scheduler, lr_scheduler2, config.train.max_steps_per_epoch)
+                    lr_scheduler, None, config.train.max_steps_per_epoch)
         score, _, _ = validate(val_loader, model, epoch)
 
         if type(lr_scheduler) == ReduceLROnPlateau:
@@ -608,10 +607,10 @@ def run() -> float:
         elif not is_scheduler_continuous(lr_scheduler):
             lr_scheduler.step()
 
-        if type(lr_scheduler2) == ReduceLROnPlateau:
-            lr_scheduler2.step(metrics=score)
-        elif lr_scheduler2 and not is_scheduler_continuous(lr_scheduler2):
-            lr_scheduler2.step()
+        # if type(lr_scheduler2) == ReduceLROnPlateau:
+        #     lr_scheduler2.step(metrics=score)
+        # elif lr_scheduler2 and not is_scheduler_continuous(lr_scheduler2):
+        #     lr_scheduler2.step()
 
         is_best = score > best_score
         best_score = max(score, best_score)
@@ -649,7 +648,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', help='override learning rate', type=float, default=0)
     parser.add_argument('--num_epochs', help='override number of epochs', type=int, default=0)
     parser.add_argument('--num_ttas', help='override number of TTAs', type=int, default=0)
-    parser.add_argument('--cosine', help='enable cosine annealing', type=bool, default=True)
+    # parser.add_argument('--cosine', help='enable cosine annealing', type=bool, default=True)
     args = parser.parse_args()
 
     if not args.config:
@@ -678,9 +677,6 @@ if __name__ == '__main__':
 
     if not os.path.exists(config.experiment_dir):
         os.makedirs(config.experiment_dir)
-
-    threshold_files = {os.path.basename(path): path for path in glob(THRESHOLDS_PATH + '*.yml')}
-    assert len(threshold_files)
 
     log_filename = 'log_predict.txt' if args.predict_oof or args.predict_test \
                     else 'log_training.txt'

@@ -7,7 +7,7 @@ import torch.optim.lr_scheduler as lr_sched
 
 from typing import Any
 
-from cosine_scheduler import CosineLRWithRestarts
+# from cosine_scheduler import CosineLRWithRestarts
 
 
 def step(optimizer, last_epoch, step_size=10, gamma=0.1, **_) -> Any:
@@ -57,10 +57,10 @@ def get_scheduler(config, optimizer, last_epoch=-1, coeff=1):
 def is_scheduler_continuous(scheduler) -> bool:
     if tuple(torch.__version__.split('.')) >= tuple(['1', '1', '0']):
         return type(scheduler) in [lr_sched.ExponentialLR, lr_sched.CosineAnnealingLR,
-                                   lr_sched.CyclicLR, CosineLRWithRestarts]
+                                   lr_sched.CyclicLR] #, CosineLRWithRestarts]
     else:
-        return type(scheduler) in [lr_sched.ExponentialLR, lr_sched.CosineAnnealingLR,
-                                   CosineLRWithRestarts]
+        return type(scheduler) in [lr_sched.ExponentialLR, lr_sched.CosineAnnealingLR]
+                                   # CosineLRWithRestarts]
 
 def get_warmup_scheduler(config, optimizer) -> Any:
     return lr_sched.CyclicLR(optimizer, base_lr=0, max_lr=config.train.warmup.max_lr,
