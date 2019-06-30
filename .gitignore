@@ -1,0 +1,9 @@
+__pycache__/
+rxrx1-utils/
+data
+*.csv
+*.pkl
+*.pth
+*.npy
+*.npz
+*.yml
