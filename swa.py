@@ -29,7 +29,7 @@ from debug import dprint
 
 
 def train_val_split(df: pd.DataFrame, fold: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    folds = np.load(config.train.folds_file)
+    folds = np.load(config.general.folds_file)
     assert folds.shape[0] == df.shape[0]
     return df.loc[folds != fold], df.loc[folds == fold]
 
@@ -61,7 +61,7 @@ def load_data(fold: int) -> Any:
 
     data_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=config.test.batch_size, shuffle=False,
-        num_workers=config.num_workers, drop_last=True)
+        num_workers=config.general.num_workers, drop_last=True)
 
     return data_loader
 

@@ -1,6 +1,7 @@
 __pycache__/
 rxrx1-utils/
 data
+models
 *.csv
 *.pkl
 *.pth

@@ -13,28 +13,32 @@ from easydict import EasyDict as edict
 from debug import dprint
 
 IN_KERNEL = os.environ.get('KAGGLE_WORKING_DIR') is not None
-INPUT_PATH = '../input/imet-2019-fgvc6/' if IN_KERNEL else '../input/'
+INPUT_PATH = '../input/imet-2019-fgvc6/' if IN_KERNEL else 'data/'
+
 
 def _get_default_config(filename: str, fold: int) -> edict:
     cfg = edict()
     cfg.in_kernel = False
     cfg.version = os.path.splitext(os.path.basename(filename))[0]
-    cfg.experiment_dir = f'../models/{cfg.version}/fold_{fold}/' \
-                         if not IN_KERNEL else '.'
-    cfg.num_workers = min(12, multiprocessing.cpu_count())
+
+    cfg.general = edict()
+    cfg.general.experiment_dir = f'models/{cfg.version}/fold_{fold}/' \
+                                 if not IN_KERNEL else '.'
+    cfg.general.num_workers = min(12, multiprocessing.cpu_count())
+    cfg.general.num_folds = 5
+    cfg.general.folds_file = 'folds.npy'
 
     cfg.model = edict()
     cfg.model.arch = 'resnet50'
     cfg.model.image_size = 0
     cfg.model.input_size = 0
     cfg.model.num_classes = None
-    cfg.model.num_folds = 5
     cfg.model.bottleneck_fc = None
     cfg.model.dropout = 0
 
     cfg.data = edict()
-    cfg.data.train_dir = INPUT_PATH + 'train/'
-    cfg.data.test_dir = INPUT_PATH + 'test/'
+    cfg.data.train_dir = os.path.join(INPUT_PATH, 'train/')
+    cfg.data.test_dir = os.path.join(INPUT_PATH, 'test/')
 
     cfg.data.rect_crop = edict()
     cfg.data.rect_crop.enable = False
@@ -43,7 +47,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.data.scale_both_dims = False
 
     cfg.train = edict()
-    cfg.train.csv = ''
+    cfg.train.csv = 'train.csv'
     cfg.train.batch_size = 32 * torch.cuda.device_count()
     cfg.train.num_epochs = 10 ** 9
     cfg.train.shuffle = True
@@ -76,7 +80,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.val.images_per_class = None
 
     cfg.test = edict()
-    cfg.test.csv = ''
+    cfg.test.csv = 'sample_submission.csv'
     cfg.test.batch_size = 64 * torch.cuda.device_count()
     cfg.test.num_ttas = 1
     cfg.test.tta_combine_func = 'mean'

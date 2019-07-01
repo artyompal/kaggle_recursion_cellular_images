@@ -23,6 +23,7 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 
+from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
 from easydict import EasyDict as edict
@@ -44,42 +45,48 @@ from model import create_model, freeze_layers, unfreeze_layers
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 IN_KERNEL = os.environ.get('KAGGLE_WORKING_DIR') is not None
-INPUT_PATH = '../input/imet-2019-fgvc6/' if IN_KERNEL else '../input/'
-ADDITIONAL_DATASET_PATH = '../input/imet-datasets/'
-THRESHOLDS_PATH = '../yml/' if not IN_KERNEL else '../input/imet-yaml/yml/'
+INPUT_PATH = '../input/imet-2019-fgvc6/' if IN_KERNEL else 'data/'
 
 if not IN_KERNEL:
     import torchsummary
 
 
 def find_input_file(path: str) -> str:
-    path = INPUT_PATH + os.path.basename(path)
-    return path if os.path.exists(path) else ADDITIONAL_DATASET_PATH + os.path.basename(path)
+    return os.path.join(INPUT_PATH, os.path.basename(path))
 
 def make_folds(df: pd.DataFrame) -> pd.DataFrame:
-    cls_counts = Counter(cls for classes in df['attribute_ids'].str.split() for cls in classes)
-    fold_cls_counts = defaultdict(int) # type: ignore
-    folds = [-1] * len(df)
+    experiments = np.array(sorted(df.experiment.unique()))
+    genes = [exp.split('-')[0] for exp in experiments]
 
-    for item in tqdm(df.sample(frac=1, random_state=42).itertuples(),
-                     total=len(df), disable=IN_KERNEL):
-        cls = min(item.attribute_ids.split(), key=lambda cls: cls_counts[cls])
-        fold_counts = [(f, fold_cls_counts[f, cls]) for f in range(config.model.num_folds)]
-        min_count = min([count for _, count in fold_counts])
-        random.seed(item.Index)
-        fold = random.choice([f for f, count in fold_counts if count == min_count])
-        folds[item.Index] = fold
-        for cls in item.attribute_ids.split():
-            fold_cls_counts[fold, cls] += 1
+    logger.info('folds:')
+    skf = StratifiedKFold(config.general.num_folds, shuffle=False)
+    folds_by_exp = {}
 
-    return np.array(folds, dtype=np.uint8)
+    for i, (train_index, val_index) in enumerate(skf.split(experiments, genes)):
+        logger.info('-' * 20)
+        logger.info(experiments[train_index])
+        logger.info(experiments[val_index])
+
+        for exp in experiments[val_index]:
+            folds_by_exp[exp] = i
+
+    # dprint(folds_by_exp)
+    folds = df.experiment.apply(lambda exp: folds_by_exp[exp]).values
+    # dprint(folds.shape)
+    # dprint(list(folds))
+    dprint(sum(folds == 0))
+    dprint(sum(folds == 1))
+    dprint(sum(folds == 2))
+    dprint(sum(folds == 3))
+    dprint(sum(folds == 4))
+    return folds
 
 def train_val_split(df: pd.DataFrame, fold: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    if not os.path.exists(config.train.folds_file):
+    if not os.path.exists(config.general.folds_file):
         folds = make_folds(df)
-        np.save(config.train.folds_file, folds)
+        np.save(config.general.folds_file, folds)
     else:
-        folds = np.load(config.train.folds_file)
+        folds = np.load(config.general.folds_file)
 
     assert folds.shape[0] == df.shape[0]
     return df.loc[folds != fold], df.loc[folds == fold]
@@ -196,15 +203,15 @@ def load_data(fold: int) -> Any:
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=config.train.batch_size, shuffle=True,
-        num_workers=config.num_workers, drop_last=True)
+        num_workers=config.general.num_workers, drop_last=True)
 
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=config.train.batch_size, shuffle=False,
-        num_workers=config.num_workers)
+        num_workers=config.general.num_workers)
 
     test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=config.test.batch_size, shuffle=False,
-        num_workers=config.num_workers)
+        num_workers=config.general.num_workers)
 
     return train_loader, val_loader, test_loader
 
@@ -277,7 +284,7 @@ def lr_finder(train_loader: Any, model: Any, criterion: Any, optimizer: Any) -> 
                         f'loss {loss:.4f} ({smoothed_loss:.4f})\t'
                         f'F2 {f2:.4f} {lr_str}')
 
-    np.savez(os.path.join(config.experiment_dir, f'lr_finder_{config.version}'),
+    np.savez(os.path.join(config.general.experiment_dir, f'lr_finder_{config.version}'),
              logs=logs, losses=losses)
 
     d1 = np.zeros_like(losses); d1[1:] = losses[1:] - losses[:-1]
@@ -299,7 +306,7 @@ def lr_finder(train_loader: Any, model: Any, criterion: Any, optimizer: Any) -> 
 
     import matplotlib.pyplot as plt
     plt.plot(logs, losses, '-D', markevery=[first, last])
-    plt.savefig(os.path.join(config.experiment_dir, 'lr_finder_plot.png'))
+    plt.savefig(os.path.join(config.general.experiment_dir, 'lr_finder_plot.png'))
 
 def mixup(x: torch.Tensor, y: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     ''' Performs mixup: https://arxiv.org/pdf/1710.09412.pdf '''
@@ -445,20 +452,13 @@ def gen_train_prediction(data_loader: Any, model: Any, epoch: int,
         yaml.dump({'threshold': threshold}, f)
 
 def gen_test_prediction(data_loader: Any, model: Any, model_path: str) -> np.ndarray:
-    threshold_file = threshold_files[os.path.splitext(os.path.basename(model_path))[0] + '.yml']
-
-    with open(threshold_file) as f:
-        threshold = yaml.load(f, Loader=yaml.SafeLoader)['threshold']
-
     predicts, _ = inference(data_loader, model)
-    predicts -= threshold
-
     filename = f'level1_test_{os.path.splitext(os.path.basename(model_path))[0]}'
     np.save(filename, predicts)
 
 def run() -> float:
     np.random.seed(0)
-    model_dir = config.experiment_dir
+    model_dir = config.general.experiment_dir
 
     logger.info('=' * 50)
 
@@ -675,10 +675,10 @@ if __name__ == '__main__':
     if args.num_ttas:
         config.test.num_ttas = args.num_ttas
 
-    if not os.path.exists(config.experiment_dir):
-        os.makedirs(config.experiment_dir)
+    if not os.path.exists(config.general.experiment_dir):
+        os.makedirs(config.general.experiment_dir)
 
     log_filename = 'log_predict.txt' if args.predict_oof or args.predict_test \
                     else 'log_training.txt'
-    logger = create_logger(os.path.join(config.experiment_dir, log_filename))
+    logger = create_logger(os.path.join(config.general.experiment_dir, log_filename))
     run()
