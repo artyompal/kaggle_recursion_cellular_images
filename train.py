@@ -38,14 +38,14 @@ from parse_config import load_config
 from losses import get_loss
 from schedulers import get_scheduler, is_scheduler_continuous, get_warmup_scheduler
 from optimizers import get_optimizer, get_lr, set_lr
-from metrics import F_score
+from metrics import accuracy
 from random_rect_crop import RandomRectCrop
 from random_erase import RandomErase
 from model import create_model, freeze_layers, unfreeze_layers
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 IN_KERNEL = os.environ.get('KAGGLE_WORKING_DIR') is not None
-INPUT_PATH = '../input/imet-2019-fgvc6/' if IN_KERNEL else 'data/'
+INPUT_PATH = '../input/' if IN_KERNEL else 'data/'
 
 if not IN_KERNEL:
     import torchsummary
@@ -245,7 +245,7 @@ def lr_finder(train_loader: Any, model: Any, criterion: Any, optimizer: Any) -> 
         loss_val = loss.data.item()
 
         predict = (output.detach() > 0.1).type(torch.FloatTensor)
-        f2 = F_score(predict, target, beta=2)
+        score = accuracy(predict, target)
 
         optimizer.zero_grad()
         loss.backward()
@@ -279,7 +279,7 @@ def lr_finder(train_loader: Any, model: Any, criterion: Any, optimizer: Any) -> 
             logger.info(f'lr_finder [{i}/{num_steps}]\t'
                         f'time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                         f'loss {loss:.4f} ({smoothed_loss:.4f})\t'
-                        f'F2 {f2:.4f} {lr_str}')
+                        f'acc {score:.4f} {lr_str}')
 
     np.savez(os.path.join(config.general.experiment_dir, f'lr_finder_{config.version}'),
              logs=logs, losses=losses)
@@ -350,7 +350,7 @@ def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
         loss = criterion(output, target.cuda())
 
         predict = (output.detach() > 0.1).type(torch.FloatTensor)
-        avg_score.update(F_score(predict, target, beta=2))
+        avg_score.update(accuracy(predict, target))
 
         losses.update(loss.data.item(), input_.size(0))
         loss.backward()
@@ -373,10 +373,10 @@ def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
             logger.info(f'{epoch} [{i}/{num_steps}]\t'
                         f'time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                         f'loss {losses.val:.4f} ({losses.avg:.4f})\t'
-                        f'F2 {avg_score.val:.4f} ({avg_score.avg:.4f})'
+                        f'acc {avg_score.val:.4f} ({avg_score.avg:.4f})'
                         + lr_str)
 
-    logger.info(f' * average F2 on train {avg_score.avg:.4f}')
+    logger.info(f' * average acc on train {avg_score.avg:.4f}')
 
 def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
     ''' Returns predictions and targets, if any. '''
@@ -429,12 +429,12 @@ def validate(val_loader: Any, model: Any, epoch: int) -> Tuple[float, float, np.
     best_score, best_thresh = 0.0, 0.0
 
     for threshold in tqdm(np.linspace(0.05, 0.25, 100), disable=IN_KERNEL):
-        score = F_score(predicts, targets, beta=2, threshold=threshold)
+        score = accuracy(predicts, targets)
         if score > best_score:
             best_score, best_thresh = score, threshold.item()
 
-    logger.info(f'{epoch} F2 {best_score:.4f} threshold {best_thresh:.4f}')
-    logger.info(f' * F2 on validation {best_score:.4f}')
+    logger.info(f'{epoch} acc {best_score:.4f} threshold {best_thresh:.4f}')
+    logger.info(f' * acc on validation {best_score:.4f}')
     return best_score, best_thresh, predicts.numpy()
 
 def gen_train_prediction(data_loader: Any, model: Any, epoch: int,

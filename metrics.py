@@ -1,6 +1,8 @@
 ''' Add all the necessary metrics here. '''
 
+import numpy as np
 import torch
+
 from debug import dprint
 
 def F_score(predict: torch.Tensor, labels: torch.Tensor, beta: int,
@@ -52,7 +54,7 @@ def GAP(predicts: torch.Tensor, confs: torch.Tensor, targets: torch.Tensor) -> f
 
     res, true_pos = 0.0, 0
 
-    for i, (c, p, t) in enumerate(zip(confs, predicts, targets)):
+    for i, (c, p, t) in enumerate(zip(confs, predicts, targets)): # type: ignore
         rel = int(p == t)
         true_pos += rel
 
@@ -60,3 +62,8 @@ def GAP(predicts: torch.Tensor, confs: torch.Tensor, targets: torch.Tensor) -> f
 
     res /= targets.shape[0] # FIXME: incorrect, not all test images depict landmarks
     return res
+
+def accuracy(predicts: torch.Tensor, targets: torch.Tensor) -> float:
+    predicts = np.argmax(predicts.cpu().numpy(), axis=1)
+    targets = targets.cpu().numpy()
+    return np.mean(predicts == targets)
