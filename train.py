@@ -349,7 +349,7 @@ def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
         output = model(input_)
         loss = criterion(output, target.cuda())
 
-        predict = (output.detach() > 0.1).type(torch.FloatTensor)
+        predict = output.detach()
         avg_score.update(accuracy(predict, target))
 
         losses.update(loss.data.item(), input_.size(0))
@@ -382,7 +382,7 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, Optional[torc
     ''' Returns predictions and targets, if any. '''
     model.eval()
 
-    sigmoid = nn.Sigmoid()
+    activation = nn.Softmax(dim=0)
     predicts_list, targets_list = [], []
 
     with torch.no_grad():
@@ -397,7 +397,7 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, Optional[torc
                 input_ = input_.view(-1, c, h, w) # fuse batch size and ncrops
 
                 output = model(input_)
-                output = sigmoid(output)
+                output = activation(output)
 
                 if config.test.tta_combine_func == 'max':
                     output = output.view(bs, ncrops, -1).max(1)[0]
@@ -407,7 +407,7 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, Optional[torc
                     assert False
             else:
                 output = model(input_.cuda())
-                output = sigmoid(output)
+                output = activation(output)
 
             predicts_list.append(output.detach().cpu().numpy())
             if target is not None:
@@ -417,36 +417,21 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, Optional[torc
     targets = np.concatenate(targets_list) if targets_list else None
     return predicts, targets
 
-def validate(val_loader: Any, model: Any, epoch: int) -> Tuple[float, float, np.ndarray]:
-    ''' Calculates validation score.
-    1. Infers predictions
-    2. Finds optimal threshold
-    3. Returns the best score and a threshold. '''
+def validate(val_loader: Any, model: Any, epoch: int) -> Tuple[float, np.ndarray]:
+    ''' Infers predictions and calculates validation score. '''
     logger.info('validate()')
-
     predicts, targets = inference(val_loader, model)
     predicts, targets = torch.tensor(predicts), torch.tensor(targets)
-    best_score, best_thresh = 0.0, 0.0
+    score = accuracy(predicts, targets)
 
-    for threshold in tqdm(np.linspace(0.05, 0.25, 100), disable=IN_KERNEL):
-        score = accuracy(predicts, targets)
-        if score > best_score:
-            best_score, best_thresh = score, threshold.item()
-
-    logger.info(f'{epoch} acc {best_score:.4f} threshold {best_thresh:.4f}')
-    logger.info(f' * acc on validation {best_score:.4f}')
-    return best_score, best_thresh, predicts.numpy()
+    logger.info(f' * epoch {epoch} acc on validation {score:.4f}')
+    return score, predicts.numpy()
 
 def gen_train_prediction(data_loader: Any, model: Any, epoch: int,
                          model_path: str) -> np.ndarray:
-    score, threshold, predicts = validate(data_loader, model, epoch)
-    predicts -= threshold
-
+    predicts, _ = inference(data_loader, model)
     filename = os.path.splitext(os.path.basename(model_path))[0]
     np.save(f'level1_train_{filename}.npy', predicts)
-
-    with open(f'{filename}.yml', 'w') as f:
-        yaml.dump({'threshold': threshold}, f)
 
 def gen_test_prediction(data_loader: Any, model: Any, model_path: str) -> np.ndarray:
     predicts, _ = inference(data_loader, model)
@@ -597,7 +582,7 @@ def run() -> float:
 
         train_epoch(train_loader, model, criterion, optimizer, epoch,
                     lr_scheduler, None, config.train.max_steps_per_epoch)
-        score, _, _ = validate(val_loader, model, epoch)
+        score, _ = validate(val_loader, model, epoch)
 
         if type(lr_scheduler) == ReduceLROnPlateau:
             lr_scheduler.step(metrics=score)
