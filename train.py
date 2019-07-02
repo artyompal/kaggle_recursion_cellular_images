@@ -23,7 +23,7 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import KFold
 from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
 from easydict import EasyDict as edict
@@ -56,13 +56,12 @@ def find_input_file(path: str) -> str:
 
 def make_folds(df: pd.DataFrame) -> pd.DataFrame:
     experiments = np.array(sorted(df.experiment.unique()))
-    genes = [exp.split('-')[0] for exp in experiments]
 
     logger.info('folds:')
-    skf = StratifiedKFold(config.general.num_folds, shuffle=False)
+    skf = KFold(config.general.num_folds, shuffle=False)
     folds_by_exp = {}
 
-    for i, (train_index, val_index) in enumerate(skf.split(experiments, genes)):
+    for i, (train_index, val_index) in enumerate(skf.split(experiments)):
         logger.info('-' * 20)
         logger.info(experiments[train_index])
         logger.info(experiments[val_index])
@@ -70,15 +69,12 @@ def make_folds(df: pd.DataFrame) -> pd.DataFrame:
         for exp in experiments[val_index]:
             folds_by_exp[exp] = i
 
-    # dprint(folds_by_exp)
     folds = df.experiment.apply(lambda exp: folds_by_exp[exp]).values
-    # dprint(folds.shape)
-    # dprint(list(folds))
-    dprint(sum(folds == 0))
-    dprint(sum(folds == 1))
-    dprint(sum(folds == 2))
-    dprint(sum(folds == 3))
-    dprint(sum(folds == 4))
+    logger.info(f'fold 0: {sum(folds == 0)}')
+    logger.info(f'fold 1: {sum(folds == 1)}')
+    logger.info(f'fold 2: {sum(folds == 2)}')
+    logger.info(f'fold 3: {sum(folds == 3)}')
+    logger.info(f'fold 4: {sum(folds == 4)}')
     return folds
 
 def train_val_split(df: pd.DataFrame, fold: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -98,18 +94,16 @@ def load_data(fold: int) -> Any:
     logger.info('config:')
     logger.info(pprint.pformat(config))
 
-    full_df = pd.read_csv(find_input_file(INPUT_PATH + config.train.csv))
-    print('full_df', full_df.shape)
-    train_df, _ = train_val_split(full_df, fold)
-    print('train_df', train_df.shape)
+    full_df = pd.read_csv(find_input_file(config.train.csv))
+    train_controls = pd.read_csv(find_input_file('train_controls.csv'))
 
-    # use original train.csv for validation
-    full_df2 = pd.read_csv(INPUT_PATH + 'train.csv')
-    assert full_df2.shape == full_df.shape
-    _, val_df = train_val_split(full_df2, fold)
+    print('full_df', full_df.shape)
+    train_df, val_df = train_val_split(full_df, fold)
+    print('train_df', train_df.shape)
     print('val_df', val_df.shape)
 
-    test_df = pd.read_csv(find_input_file(INPUT_PATH + 'sample_submission.csv'))
+    test_df = pd.read_csv(find_input_file(config.test.csv))
+    test_controls = pd.read_csv(find_input_file('test_controls.csv'))
 
     augs: List[Union[albu.BasicTransform, albu.OneOf]] = []
 
@@ -190,14 +184,17 @@ def load_data(fold: int) -> Any:
         ])
 
 
-    train_dataset = ImageDataset(train_df, mode='train', config=config,
+    train_dataset = ImageDataset(train_df, train_controls,
+                                 mode='train', config=config,
                                  augmentor=transform_train)
 
     num_ttas_for_val = config.test.num_ttas if args.predict_oof else 1
-    val_dataset = ImageDataset(val_df, mode='val', config=config,
+    val_dataset = ImageDataset(val_df, train_controls,
+                               mode='val', config=config,
                                num_ttas=num_ttas_for_val, augmentor=transform_test)
 
-    test_dataset = ImageDataset(test_df, mode='test', config=config,
+    test_dataset = ImageDataset(test_df, test_controls,
+                                mode='test', config=config,
                                 num_ttas=config.test.num_ttas,
                                 augmentor=transform_test)
 

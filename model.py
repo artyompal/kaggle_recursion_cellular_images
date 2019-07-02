@@ -14,9 +14,24 @@ else:
     from model_provider import get_model
 
 
-def create_model(config: Any, pretrained: bool) -> Any:
-    dropout = config.model.dropout
+class SiameseModel(nn.Module):
+    ''' Model with two inputs. '''
+    def __init__(self, config: Any, pretrained: bool) -> None:
+        super().__init__()
+        self.head = create_model_head(config, pretrained)
+        self.fc = nn.Linear(self.head.output.in_features, config.model.num_classes)
+        self.num_channels = config.model.num_channels
 
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y1 = self.head.features(x[:, :self.num_channels])
+        y2 = self.head.features(x[:, self.num_channels:])
+
+        d = y1 - y2
+        d = d.view(d.size(0), -1)
+        y = self.fc(d)
+        return y
+
+def create_model_head(config: Any, pretrained: bool) -> Any:
     if not IN_KERNEL:
         model = get_model(config.model.arch, pretrained=pretrained)
     else:
@@ -27,40 +42,44 @@ def create_model(config: Any, pretrained: bool) -> Any:
     else:
         model.features[-1] = nn.AdaptiveAvgPool2d(1)
 
-    if config.model.arch == 'pnasnet5large':
-        if dropout == 0.0:
-            model.output = nn.Linear(model.output[-1].in_features, config.model.num_classes)
-        else:
-            model.output = nn.Sequential(
-                 nn.Dropout(dropout),
-                 nn.Linear(model.output[-1].in_features, config.model.num_classes))
-    elif config.model.arch == 'xception':
-        if dropout < 0.1:
-            model.output = nn.Linear(2048, config.model.num_classes)
-        else:
-            model.output = nn.Sequential(
-                 nn.Dropout(dropout),
-                 nn.Linear(2048, config.model.num_classes))
-    elif config.model.arch.startswith('inception'):
-        if dropout < 0.1:
-            model.output = nn.Linear(model.output[-1].in_features, config.model.num_classes)
-        else:
-            model.output = nn.Sequential(
-                 nn.Dropout(dropout),
-                 nn.Linear(model.output[-1].in_features, config.model.num_classes))
-    else:
-        if dropout < 0.1:
-            model.output = nn.Linear(model.output.in_features, config.model.num_classes)
-        else:
-            model.output = nn.Sequential(
-                 nn.Dropout(dropout),
-                 nn.Linear(model.output.in_features, config.model.num_classes))
+    # dropout = config.model.dropout
+    #
+    # if config.model.arch == 'pnasnet5large':
+    #     if dropout == 0.0:
+    #         model.output = nn.Linear(model.output[-1].in_features, config.model.num_classes)
+    #     else:
+    #         model.output = nn.Sequential(
+    #              nn.Dropout(dropout),
+    #              nn.Linear(model.output[-1].in_features, config.model.num_classes))
+    # elif config.model.arch == 'xception':
+    #     if dropout < 0.1:
+    #         model.output = nn.Linear(2048, config.model.num_classes)
+    #     else:
+    #         model.output = nn.Sequential(
+    #              nn.Dropout(dropout),
+    #              nn.Linear(2048, config.model.num_classes))
+    # elif config.model.arch.startswith('inception'):
+    #     if dropout < 0.1:
+    #         model.output = nn.Linear(model.output[-1].in_features, config.model.num_classes)
+    #     else:
+    #         model.output = nn.Sequential(
+    #              nn.Dropout(dropout),
+    #              nn.Linear(model.output[-1].in_features, config.model.num_classes))
+    # else:
+    #     if dropout < 0.1:
+    #         model.output = nn.Linear(model.output.in_features, config.model.num_classes)
+    #     else:
+    #         model.output = nn.Sequential(
+    #              nn.Dropout(dropout),
+    #              nn.Linear(model.output.in_features, config.model.num_classes))
 
-    model = torch.nn.DataParallel(model)
     return model
 
+def create_model(config: Any, pretrained: bool) -> Any:
+    return SiameseModel(config, pretrained)
+
 def freeze_layers(model: Any) -> None:
-    ''' Freezes all layers but the last one. '''
+    ''' Freezes all layers but the last FC layer. '''
     m = model.module
     for layer in m.children():
         for param in layer.parameters():
@@ -71,6 +90,7 @@ def freeze_layers(model: Any) -> None:
             param.requires_grad = True
 
 def unfreeze_layers(model: Any) -> None:
+    ''' Unfreezes all layers. '''
     for layer in model.module.children():
         for param in layer.parameters():
             param.requires_grad = True

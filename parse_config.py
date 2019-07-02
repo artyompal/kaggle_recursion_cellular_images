@@ -35,6 +35,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.model.num_classes = None
     cfg.model.bottleneck_fc = None
     cfg.model.dropout = 0
+    cfg.model.num_channels = 3
 
     cfg.data = edict()
     cfg.data.train_dir = os.path.join(INPUT_PATH, 'train/')
@@ -80,7 +81,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.val.images_per_class = None
 
     cfg.test = edict()
-    cfg.test.csv = 'sample_submission.csv'
+    cfg.test.csv = 'test.csv'
     cfg.test.batch_size = 64 * torch.cuda.device_count()
     cfg.test.num_ttas = 1
     cfg.test.tta_combine_func = 'mean'
