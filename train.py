@@ -596,10 +596,10 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
                     lr_scheduler, None, config.train.max_steps_per_epoch)
         score, _ = validate(val_loader, model, epoch)
 
-        if type(lr_scheduler) == ReduceLROnPlateau:
-            lr_scheduler.step(metrics=score)
-        elif not is_scheduler_continuous(lr_scheduler):
-            lr_scheduler.step()
+        # if type(lr_scheduler) == ReduceLROnPlateau:
+        lr_scheduler.step(metrics=score)
+        # elif not is_scheduler_continuous(lr_scheduler):
+        #     lr_scheduler.step()
 
         # if type(lr_scheduler2) == ReduceLROnPlateau:
         #     lr_scheduler2.step(metrics=score)
@@ -684,12 +684,11 @@ if __name__ == '__main__':
 
         for key, value in config.hyperopt.augmentations.items():
             type, params = value['type'], value['args']
-            dprint(type)
-            dprint(params)
 
             if type == 'choice':
                 hyperopt_space[key] = hp.choice(key, params)
             else:
                 hyperopt_space[key] = hp.__dict__[type](key, *params)
 
-        best = fmin(fn=run, space=hyperopt_space, algo=tpe.suggest, max_evals=100)
+        best = fmin(fn=run, space=hyperopt_space, algo=tpe.suggest,
+                    max_evals=config.hyperopt.max_evals)

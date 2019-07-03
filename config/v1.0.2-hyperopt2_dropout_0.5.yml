@@ -4,7 +4,7 @@ model:
     image_size: 128
     input_size: 128
     num_classes: 1108
-    dropout: 0.0
+    dropout: 0.5
 
 train:
     batch_size: 32
@@ -69,16 +69,16 @@ hyperopt:
             args:   ['none', 'soft', 'medium', 'hard']
         noise:
             type:   'uniform'
-            args:   [0, 0.33]
+            args:   [0, 1]
         blur:
             type:   'uniform'
-            args:   [0, 0.33]
+            args:   [0, 1]
         distortion:
             type:   'uniform'
-            args:   [0, 0.33]
+            args:   [0, 1]
         color:
             type:   'uniform'
-            args:   [0, 0.33]
+            args:   [0, 1]
         global_prob:
             type:   'uniform'
             args:   [0.5, 1.0]

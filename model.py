@@ -19,6 +19,7 @@ class SiameseModel(nn.Module):
     def __init__(self, config: Any, pretrained: bool) -> None:
         super().__init__()
         self.head = create_model_head(config, pretrained)
+        self.dropout = nn.Dropout(config.model.dropout) if config.model.dropout else None
         self.fc = nn.Linear(self.head.output.in_features, config.model.num_classes)
         self.num_channels = config.model.num_channels
 
@@ -27,8 +28,12 @@ class SiameseModel(nn.Module):
         y2 = self.head.features(x[:, self.num_channels:])
 
         d = y1 - y2
-        d = d.view(d.size(0), -1)
-        y = self.fc(d)
+        y = d.view(d.size(0), -1)
+
+        if self.dropout is not None:
+            y = self.dropout(y)
+            
+        y = self.fc(y)
         return y
 
 def create_model_head(config: Any, pretrained: bool) -> Any:
