@@ -1,0 +1,83 @@
+
+model:
+    arch: 'resnet50'
+    image_size: 128
+    input_size: 128
+    num_classes: 1108
+    dropout: 0.3
+
+train:
+    batch_size: 32
+    max_steps_per_epoch: 15000
+    num_epochs: 2
+    # enable_warmup: true
+    # warmup:
+    #     steps: 5000
+    #     max_lr: 1e-4
+    # mixup:
+    #     enable: true
+    #     beta_a: 0.3
+
+test:
+    batch_size: 32
+    # num_ttas: 2
+
+optimizer:
+    name: 'adam'
+    params:
+        lr: 1e-4
+
+scheduler:
+    name: 'reduce_lr_on_plateau'
+    params:
+        factor: 0.2
+        patience: 100
+        min_lr: 3e-7
+        threshold: 1e-3
+
+loss:
+    name: 'cross_entropy'
+
+augmentations:
+    affine: 'medium'
+    hflip: true
+    blur: 0.3
+    distortion: 0.2
+    noise: 0.3
+#     erase:
+#         prob: 0.5
+#         min_area: 0.02
+#         max_area: 0.4
+#         min_ratio: 0.3
+#         max_ratio: 3.33
+
+hyperopt:
+    enable: true
+    augmentations:
+        hflip:
+            type:   'choice'
+            args:   [0, 1]
+        vflip:
+            type:   'choice'
+            args:   [0, 1]
+        rotate90:
+            type:   'choice'
+            args:   [0, 1]
+        affine:
+            type:   'choice'
+            args:   ['none', 'soft', 'medium', 'hard']
+        noise:
+            type:   'uniform'
+            args:   [0, 0.33]
+        blur:
+            type:   'uniform'
+            args:   [0, 0.33]
+        distortion:
+            type:   'uniform'
+            args:   [0, 0.33]
+        color:
+            type:   'uniform'
+            args:   [0, 0.33]
+        global_prob:
+            type:   'uniform'
+            args:   [0.5, 1.0]

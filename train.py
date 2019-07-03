@@ -2,6 +2,7 @@
 ''' Trains a model or infers predictions. '''
 
 import argparse
+import hashlib
 import math
 import os
 import pprint
@@ -49,7 +50,7 @@ INPUT_PATH = '../input/' if IN_KERNEL else 'data/'
 
 if not IN_KERNEL:
     import torchsummary
-
+    from hyperopt import hp, tpe, fmin
 
 def find_input_file(path: str) -> str:
     return os.path.join(INPUT_PATH, os.path.basename(path))
@@ -438,11 +439,22 @@ def gen_test_prediction(data_loader: Any, model: Any, model_path: str) -> np.nda
     filename = f'level1_test_{os.path.splitext(os.path.basename(model_path))[0]}'
     np.save(filename, predicts)
 
-def run() -> float:
+def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
     np.random.seed(0)
-    model_dir = config.general.experiment_dir
-
     logger.info('=' * 50)
+
+    if hyperparams:
+        hash = hashlib.sha224(str(hyperparams).encode()).hexdigest()[:8]
+        model_dir = os.path.join(config.general.experiment_dir, f'{hash}')
+
+        if not os.path.exists(model_dir):
+            os.makedirs(model_dir)
+
+        str_params = str(hyperparams)
+        logger.info(f'hyperparameters: {hyperparams}')
+        config.augmentations.update(hyperparams)
+    else:
+        model_dir = config.general.experiment_dir
 
     train_loader, val_loader, test_loader = load_data(args.fold)
     logger.info(f'creating a model {config.model.arch}')
@@ -625,7 +637,7 @@ if __name__ == '__main__':
     parser.add_argument('--weights', help='model to resume training', type=str)
     parser.add_argument('--fold', help='fold number', type=int, default=0)
     parser.add_argument('--predict_oof', help='make predictions for the train set and return', action='store_true')
-    parser.add_argument('--predict_test', help='make predictions for the testset and return', action='store_true')
+    parser.add_argument('--predict_test', help='make predictions for the test set and return', action='store_true')
     parser.add_argument('--summary', help='show model summary', action='store_true')
     parser.add_argument('--lr', help='override learning rate', type=float, default=0)
     parser.add_argument('--num_epochs', help='override number of epochs', type=int, default=0)
@@ -663,4 +675,21 @@ if __name__ == '__main__':
     log_filename = 'log_predict.txt' if args.predict_oof or args.predict_test \
                     else 'log_training.txt'
     logger = create_logger(os.path.join(config.general.experiment_dir, log_filename))
-    run()
+
+    if not config.hyperopt.enable:
+        run()
+    else:
+        # use hyperopt to find hyperparameters
+        hyperopt_space = {}
+
+        for key, value in config.hyperopt.augmentations.items():
+            type, params = value['type'], value['args']
+            dprint(type)
+            dprint(params)
+
+            if type == 'choice':
+                hyperopt_space[key] = hp.choice(key, params)
+            else:
+                hyperopt_space[key] = hp.__dict__[type](key, *params)
+
+        best = fmin(fn=run, space=hyperopt_space, algo=tpe.suggest, max_evals=100)

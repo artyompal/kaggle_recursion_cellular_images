@@ -7,4 +7,3 @@ models
 *.pth
 *.npy
 *.npz
-*.yml

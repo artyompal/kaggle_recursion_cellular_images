@@ -133,6 +133,19 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.augmentations.erase.min_ratio = 0.3
     cfg.augmentations.erase.max_ratio = 3.33
 
+    cfg.hyperopt = edict()
+    cfg.hyperopt.enable = False
+    cfg.hyperopt.augmentations = edict()
+    cfg.hyperopt.augmentations.hflip = edict()
+    cfg.hyperopt.augmentations.vflip = edict()
+    cfg.hyperopt.augmentations.rotate90 = edict()
+    cfg.hyperopt.augmentations.affine = edict()
+    cfg.hyperopt.augmentations.noise = edict()
+    cfg.hyperopt.augmentations.blur = edict()
+    cfg.hyperopt.augmentations.distortion = edict()
+    cfg.hyperopt.augmentations.color = edict()
+    cfg.hyperopt.augmentations.global_prob = edict()
+
     return cfg
 
 def _merge_config(src: edict, dst: edict) -> edict:
