@@ -463,7 +463,9 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
     criterion = get_loss(config)
 
     if args.summary:
-        torchsummary.summary(model, (3, config.model.input_size, config.model.input_size))
+        torchsummary.summary(model, (config.model.num_channels * 2,
+                                     config.model.input_size,
+                                     config.model.input_size))
 
     if args.lr_finder:
         optimizer = get_optimizer(config, model.parameters())

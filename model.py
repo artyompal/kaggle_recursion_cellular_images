@@ -23,7 +23,7 @@ class SiameseModel(nn.Module):
         self.fc = nn.Linear(self.head.output.in_features, config.model.num_classes)
         self.num_channels = config.model.num_channels
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor: # type: ignore
         y1 = self.head.features(x[:, :self.num_channels])
         y2 = self.head.features(x[:, self.num_channels:])
 
@@ -32,9 +32,61 @@ class SiameseModel(nn.Module):
 
         if self.dropout is not None:
             y = self.dropout(y)
-            
+
         y = self.fc(y)
         return y
+
+class SiameseModel2(nn.Module):
+    ''' Model with two inputs. '''
+    def __init__(self, config: Any, pretrained: bool) -> None:
+        super().__init__()
+        self.head = create_model_head(config, pretrained)
+        self.dropout = nn.Dropout(config.model.dropout) if config.model.dropout else None
+        self.fc = nn.Linear(2 * self.head.output.in_features, config.model.num_classes)
+        self.num_channels = config.model.num_channels
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor: # type: ignore
+        y1 = self.head.features(x[:, :self.num_channels])
+        y2 = self.head.features(x[:, self.num_channels:])
+
+        y = torch.cat([y1, y2], dim=1)
+        y = y.view(y.size(0), -1)
+
+        if self.dropout is not None:
+            y = self.dropout(y)
+
+        y = self.fc(y)
+        return y
+
+class SiameseModel3(nn.Module):
+    ''' Model with two inputs. '''
+    def __init__(self, config: Any, pretrained: bool) -> None:
+        super().__init__()
+        self.head = create_model_head(config, pretrained)
+        self.dropout = nn.Dropout(config.model.dropout) if config.model.dropout else None
+        self.num_hidden = config.model.num_hidden
+        self.fc = nn.Linear(2 * self.head.output.in_features, self.num_hidden)
+        self.fc2 = nn.Linear(self.num_hidden, config.model.num_classes)
+        self.num_channels = config.model.num_channels
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor: # type: ignore
+        y1 = self.head.features(x[:, :self.num_channels])
+        y2 = self.head.features(x[:, self.num_channels:])
+
+        y = torch.cat([y1, y2], dim=1)
+        y = y.view(y.size(0), -1)
+
+        if self.dropout is not None:
+            y = self.dropout(y)
+
+        y = self.fc(y)
+
+        if self.dropout is not None:
+            y = self.dropout(y)
+
+        y = self.fc2(y)
+        return y
+
 
 def create_model_head(config: Any, pretrained: bool) -> Any:
     if not IN_KERNEL:
@@ -81,7 +133,7 @@ def create_model_head(config: Any, pretrained: bool) -> Any:
     return model
 
 def create_model(config: Any, pretrained: bool) -> Any:
-    return SiameseModel(config, pretrained)
+    return globals()[config.model.type](config, pretrained)
 
 def freeze_layers(model: Any) -> None:
     ''' Freezes all layers but the last FC layer. '''

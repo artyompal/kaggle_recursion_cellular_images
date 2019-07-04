@@ -29,6 +29,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.general.folds_file = 'folds.npy'
 
     cfg.model = edict()
+    cfg.model.type = 'SiameseModel'
     cfg.model.arch = 'resnet50'
     cfg.model.image_size = 0
     cfg.model.input_size = 0
