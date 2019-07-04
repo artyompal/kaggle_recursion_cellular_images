@@ -19,14 +19,13 @@ import albumentations as albu
 from PIL import Image
 from tqdm import tqdm
 from debug import dprint
-
-
-SAVE_DEBUG_IMAGES = False
+from scipy.stats import describe
 
 
 class ImageDataset(torch.utils.data.Dataset): # type: ignore
     def __init__(self, dataframe: pd.DataFrame, controls_df: pd.DataFrame,
-                 mode: str, config: Any, num_ttas: int = 1, augmentor: Any = None) -> None:
+                 mode: str, config: Any, num_ttas: int = 1,
+                 augmentor: Any = None, debug_save: bool = False) -> None:
         print(f'creating data_loader for {config.version} in mode={mode}')
         assert mode in ['train', 'val', 'test']
 
@@ -39,6 +38,7 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         self.image_size = config.model.image_size
         self.num_ttas = num_ttas
         self.num_channels = config.model.num_channels
+        self.debug_save = debug_save
 
 
         # load negative control information
@@ -65,8 +65,43 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
 
         self.transforms = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5] * 6, std=[0.5] * 6)
+            transforms.Normalize(
+                mean=[0.02645905, 0.05782904, 0.0412261] * 2,
+                std=[0.03776616, 0.05301339, 0.03087561] * 2)
         ])
+
+        '''
+        stats for the train set:
+        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w1.png
+        dataset mean [0.02645905 0.02645905 0.02645905]
+        dataset std [0.03776616 0.03776616 0.03776616]
+        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w2.png
+        dataset mean [0.05782904 0.05782904 0.05782904]
+        dataset std [0.05301339 0.05301339 0.05301339]
+        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w3.png
+        dataset mean [0.0412261 0.0412261 0.0412261]
+        dataset std [0.03087561 0.03087561 0.03087561]
+        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w4.png
+        dataset mean [0.04099516 0.04099516 0.04099516]
+        dataset std [0.03875584 0.03875584 0.03875584]
+        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w5.png
+        dataset mean [0.02156723 0.02156723 0.02156723]
+        dataset std [0.02616441 0.02616441 0.02616441]
+        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w6.png
+        dataset mean [0.03849208 0.03849208 0.03849208]
+        dataset std [0.03077043 0.03077043 0.03077043]
+
+        stats for the test set:
+        /home/cppg/dev/kaggle/recursion_cellular_images/data/test/**/*_w1.png
+        dataset mean [0.01644124 0.01644124 0.01644124]
+        dataset std [0.02103724 0.02103724 0.02103724]
+        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/test/**/*_w2.png
+        dataset mean [0.06695988 0.06695988 0.06695988]
+        dataset std [0.0612395 0.0612395 0.0612395]
+        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/test/**/*_w3.png
+        dataset mean [0.03670188 0.03670188 0.03670188]
+        dataset std [0.02534438 0.02534438 0.02534438]
+        '''
 
         # if 'ception' in config.model.arch:
         #     self.transforms = transforms.Compose([
@@ -118,9 +153,22 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
             image0, image1 = results['image'], results['image1']
             image = np.dstack([image0, image1])
 
-        if SAVE_DEBUG_IMAGES:
-            os.makedirs(f'../debug_images_{self.version}/', exist_ok=True)
-            Image.fromarray(image).save(f'../debug_images_{self.version}/{index}.png')
+        if self.debug_save:
+            os.makedirs(f'debug_images_{self.version}/', exist_ok=True)
+
+            orig_img = image[:, :, :self.num_channels]
+            sirna_img = image[:, :, self.num_channels:]
+            # dprint(orig_img.dtype)
+            # dprint(describe(orig_img.flatten()))
+            orig_img = np.clip(orig_img * 20, 0, 255)
+            # dprint(orig_img.dtype)
+            # dprint(describe(orig_img.flatten()))
+
+            sirna_img = np.clip(sirna_img * 20, 0, 255)
+            orig_img = Image.fromarray(orig_img)
+            sirna_img = Image.fromarray(sirna_img)
+            orig_img.save(f'debug_images_{self.version}/{index}_orig.png')
+            sirna_img.save(f'debug_images_{self.version}/{index}_sirna.png')
 
         return self.transforms(image)
 

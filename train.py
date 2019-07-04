@@ -187,7 +187,8 @@ def load_data(fold: int) -> Any:
 
     train_dataset = ImageDataset(train_df, train_controls,
                                  mode='train', config=config,
-                                 augmentor=transform_train)
+                                 augmentor=transform_train,
+                                 debug_save=args.save_images)
 
     num_ttas_for_val = config.test.num_ttas if args.predict_oof else 1
     val_dataset = ImageDataset(val_df, train_controls,
@@ -642,6 +643,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', help='override learning rate', type=float, default=0)
     parser.add_argument('--num_epochs', help='override number of epochs', type=int, default=0)
     parser.add_argument('--num_ttas', help='override number of TTAs', type=int, default=0)
+    parser.add_argument('--save_images', help='debug save images', action='store_true')
     # parser.add_argument('--cosine', help='enable cosine annealing', type=bool, default=True)
     args = parser.parse_args()
 
@@ -668,6 +670,9 @@ if __name__ == '__main__':
 
     if args.num_ttas:
         config.test.num_ttas = args.num_ttas
+
+    if args.save_images:
+        config.general.num_workers = 0
 
     if not os.path.exists(config.general.experiment_dir):
         os.makedirs(config.general.experiment_dir)
