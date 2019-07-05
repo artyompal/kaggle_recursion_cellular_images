@@ -14,11 +14,20 @@ else:
     from model_provider import get_model
 
 
+class ClassifierModel(nn.Module):
+    ''' Just an image classifier. '''
+    def __init__(self, config: Any, pretrained: bool) -> None:
+        super().__init__()
+        self.model = create_classifier_model(config, pretrained)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor: # type: ignore
+        return self.model(x)
+
 class SiameseModel(nn.Module):
     ''' Model with two inputs. '''
     def __init__(self, config: Any, pretrained: bool) -> None:
         super().__init__()
-        self.head = create_model_head(config, pretrained)
+        self.head = create_classifier_model(config, pretrained)
         self.dropout = nn.Dropout(config.model.dropout) if config.model.dropout else None
         self.fc = nn.Linear(self.head.output.in_features, config.model.num_classes)
         self.num_channels = config.model.num_channels
@@ -40,7 +49,7 @@ class SiameseModel2(nn.Module):
     ''' Model with two inputs. '''
     def __init__(self, config: Any, pretrained: bool) -> None:
         super().__init__()
-        self.head = create_model_head(config, pretrained)
+        self.head = create_classifier_model(config, pretrained)
         self.dropout = nn.Dropout(config.model.dropout) if config.model.dropout else None
         self.fc = nn.Linear(2 * self.head.output.in_features, config.model.num_classes)
         self.num_channels = config.model.num_channels
@@ -62,7 +71,7 @@ class SiameseModel3(nn.Module):
     ''' Model with two inputs. '''
     def __init__(self, config: Any, pretrained: bool) -> None:
         super().__init__()
-        self.head = create_model_head(config, pretrained)
+        self.head = create_classifier_model(config, pretrained)
         self.dropout = nn.Dropout(config.model.dropout) if config.model.dropout else None
         self.num_hidden = config.model.num_hidden
         self.fc = nn.Linear(2 * self.head.output.in_features, self.num_hidden)
@@ -88,47 +97,62 @@ class SiameseModel3(nn.Module):
         return y
 
 
-def create_model_head(config: Any, pretrained: bool) -> Any:
+def create_classifier_model(config: Any, pretrained: bool) -> Any:
+    num_channels = config.model.num_channels
+
     if not IN_KERNEL:
         model = get_model(config.model.arch, pretrained=pretrained)
     else:
         model = get_model(config.model.arch, pretrained=pretrained, root='../input/pytorchcv-models/')
+
+    # print(model)
+    if num_channels != 3:
+        block = model.features[0].conv
+        block.conv = nn.Conv2d(in_channels=num_channels,
+                               out_channels=block.conv.out_channels,
+                               kernel_size=block.conv.kernel_size,
+                               stride=block.conv.stride,
+                               padding=block.conv.padding,
+                               dilation=block.conv.dilation,
+                               groups=block.conv.groups,
+                               bias=block.conv.bias,
+                               padding_mode=block.conv.padding_mode)
 
     if config.model.arch == 'xception':
         model.features[-1].pool = nn.AdaptiveAvgPool2d(1)
     else:
         model.features[-1] = nn.AdaptiveAvgPool2d(1)
 
-    # dropout = config.model.dropout
-    #
-    # if config.model.arch == 'pnasnet5large':
-    #     if dropout == 0.0:
-    #         model.output = nn.Linear(model.output[-1].in_features, config.model.num_classes)
-    #     else:
-    #         model.output = nn.Sequential(
-    #              nn.Dropout(dropout),
-    #              nn.Linear(model.output[-1].in_features, config.model.num_classes))
-    # elif config.model.arch == 'xception':
-    #     if dropout < 0.1:
-    #         model.output = nn.Linear(2048, config.model.num_classes)
-    #     else:
-    #         model.output = nn.Sequential(
-    #              nn.Dropout(dropout),
-    #              nn.Linear(2048, config.model.num_classes))
-    # elif config.model.arch.startswith('inception'):
-    #     if dropout < 0.1:
-    #         model.output = nn.Linear(model.output[-1].in_features, config.model.num_classes)
-    #     else:
-    #         model.output = nn.Sequential(
-    #              nn.Dropout(dropout),
-    #              nn.Linear(model.output[-1].in_features, config.model.num_classes))
-    # else:
-    #     if dropout < 0.1:
-    #         model.output = nn.Linear(model.output.in_features, config.model.num_classes)
-    #     else:
-    #         model.output = nn.Sequential(
-    #              nn.Dropout(dropout),
-    #              nn.Linear(model.output.in_features, config.model.num_classes))
+    dropout = config.model.dropout
+
+    if config.model.arch == 'pnasnet5large':
+        if dropout == 0.0:
+            model.output = nn.Linear(model.output[-1].in_features, config.model.num_classes)
+        else:
+            model.output = nn.Sequential(
+                 nn.Dropout(dropout),
+                 nn.Linear(model.output[-1].in_features, config.model.num_classes))
+    elif config.model.arch == 'xception':
+        if dropout < 0.1:
+            model.output = nn.Linear(2048, config.model.num_classes)
+        else:
+            model.output = nn.Sequential(
+                 nn.Dropout(dropout),
+                 nn.Linear(2048, config.model.num_classes))
+    elif config.model.arch.startswith('inception'):
+        if dropout < 0.1:
+            model.output = nn.Linear(model.output[-1].in_features, config.model.num_classes)
+        else:
+            model.output = nn.Sequential(
+                 nn.Dropout(dropout),
+                 nn.Linear(model.output[-1].in_features, config.model.num_classes))
+    else:
+        if dropout < 0.1:
+            model.output = nn.Linear(model.output.in_features, config.model.num_classes)
+        else:
+            model.output = nn.Sequential(
+                 nn.Dropout(dropout),
+                 nn.Linear(model.output.in_features, config.model.num_classes))
 
     return model
 

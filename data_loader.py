@@ -21,6 +21,8 @@ from tqdm import tqdm
 from debug import dprint
 from scipy.stats import describe
 
+from rxrx1.rxrx.io import load_site_as_rgb
+
 
 class ImageDataset(torch.utils.data.Dataset): # type: ignore
     def __init__(self, dataframe: pd.DataFrame, controls_df: pd.DataFrame,
@@ -63,11 +65,16 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
             self.augmentor = albu.Compose(augmentor, p=1,
                                           additional_targets=targets)
 
+        train_mean = [0.02645905, 0.05782904, 0.0412261, 0.04099516, 0.02156723, 0.03849208]
+        train_std = [0.03776616, 0.05301339, 0.03087561, 0.03875584, 0.02616441, 0.03077043]
+
         self.transforms = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(
-                mean=[0.02645905, 0.05782904, 0.0412261] * 2,
-                std=[0.03776616, 0.05301339, 0.03087561] * 2)
+                # mean=[0.485, 0.456, 0.406] * 2,
+                # std=[0.229, 0.224, 0.225] * 2)
+                mean=train_mean[:self.num_channels],
+                std=train_std[:self.num_channels])
         ])
 
         '''
@@ -136,35 +143,58 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
             filename = f'{exp}/Plate{plate}/{well}_s{site+1}_w{channel+1}.png'
             layers.append(self._load_image(os.path.join(self.path, filename)))
 
-        neg_ctl_well = self.neg_control[f'{exp}_{plate}']
-
-        for channel in range(self.num_channels):
-            filename = f'{exp}/Plate{plate}/{neg_ctl_well}_s{site+1}_w{channel+1}.png'
-            layers.append(self._load_image(os.path.join(self.path, filename)))
+        # neg_ctl_well = self.neg_control[f'{exp}_{plate}']
+        #
+        # for channel in range(self.num_channels):
+        #     filename = f'{exp}/Plate{plate}/{neg_ctl_well}_s{site+1}_w{channel+1}.png'
+        #     layers.append(self._load_image(os.path.join(self.path, filename)))
 
         image = np.dstack(layers)
         return image
 
+    # def _load_images(self, index: int) -> np.array:
+    #     df_index, site = index // 2, index % 2 + 1
+    #     dataset = 'train' if self.mode != 'test' else 'test'
+    #     exp, plate, well = self.df.iloc[df_index, 1], self.df.iloc[df_index, 2], \
+    #                        self.df.iloc[df_index, 3]
+    #     sirna_img = load_site_as_rgb(dataset, exp, plate, well, site,
+    #                                  base_path='data')
+    #
+    #     neg_ctl_well = self.neg_control[f'{exp}_{plate}']
+    #     neg_ctl_img = load_site_as_rgb(dataset, exp, plate, neg_ctl_well, site,
+    #                              base_path='data')
+    #
+    #     sirna_img = sirna_img.astype(np.uint8)
+    #     neg_ctl_img = neg_ctl_img.astype(np.uint8)
+    #
+    #     if self.image_size != 0:
+    #         sirna_img = Image.fromarray(sirna_img).resize((self.image_size, self.image_size), Image.LANCZOS)
+    #         sirna_img = np.array(sirna_img)
+    #
+    #         neg_ctl_img = Image.fromarray(neg_ctl_img).resize((self.image_size, self.image_size), Image.LANCZOS)
+    #         neg_ctl_img = np.array(neg_ctl_img)
+    #
+    #     return np.dstack([sirna_img, neg_ctl_img])
+
     def _transform_images(self, image: np.array, index: int) -> torch.Tensor:
         ''' Applies augmentations, if any. '''
         if self.augmentor is not None:
-            image0, image1 = image[:, :, :self.num_channels], image[:, :, self.num_channels:]
-            results = self.augmentor(image=image0, image1=image1)
-            image0, image1 = results['image'], results['image1']
-            image = np.dstack([image0, image1])
+            if self.num_channels == 3:
+                image = self.augmentor(image=image)['image']
+            elif self.num_channels == 6:
+                image0, image1 = image[:, :, :3], image[:, :, 3:]
+                results = self.augmentor(image=image0, image1=image1)
+                image0, image1 = results['image'], results['image1']
+                image = np.dstack([image0, image1])
+            else:
+                raise RuntimeError('unsupported number of channels')
 
         if self.debug_save:
             os.makedirs(f'debug_images_{self.version}/', exist_ok=True)
 
             orig_img = image[:, :, :self.num_channels]
             sirna_img = image[:, :, self.num_channels:]
-            # dprint(orig_img.dtype)
-            # dprint(describe(orig_img.flatten()))
-            orig_img = np.clip(orig_img * 20, 0, 255)
-            # dprint(orig_img.dtype)
-            # dprint(describe(orig_img.flatten()))
 
-            sirna_img = np.clip(sirna_img * 20, 0, 255)
             orig_img = Image.fromarray(orig_img)
             sirna_img = Image.fromarray(sirna_img)
             orig_img.save(f'debug_images_{self.version}/{index}_orig.png')
