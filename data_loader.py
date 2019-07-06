@@ -133,7 +133,6 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         return np.array(image)
 
     def _load_images(self, index: int) -> np.array:
-        ''' Loads two N-channel images and stacks them. '''
         df_index, site = index // 2, index % 2
         exp, plate, well = self.df.iloc[df_index, 1], self.df.iloc[df_index, 2], \
                            self.df.iloc[df_index, 3],
