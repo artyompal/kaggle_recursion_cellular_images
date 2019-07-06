@@ -39,9 +39,6 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.model.num_channels = 3
 
     cfg.data = edict()
-    cfg.data.train_dir = os.path.join(INPUT_PATH, 'train/')
-    cfg.data.test_dir = os.path.join(INPUT_PATH, 'test/')
-
     cfg.data.rect_crop = edict()
     cfg.data.rect_crop.enable = False
     cfg.data.min_ratio = 0.08
@@ -50,6 +47,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
 
     cfg.train = edict()
     cfg.train.csv = 'train.csv'
+    cfg.train.path = 'data/train'
     cfg.train.batch_size = 32 * torch.cuda.device_count()
     cfg.train.num_epochs = 10 ** 9
     cfg.train.shuffle = True
@@ -83,6 +81,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
 
     cfg.test = edict()
     cfg.test.csv = 'test.csv'
+    cfg.test.path = 'data/test'
     cfg.test.batch_size = 64 * torch.cuda.device_count()
     cfg.test.num_ttas = 1
     cfg.test.tta_combine_func = 'mean'

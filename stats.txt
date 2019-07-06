@@ -1,0 +1,32 @@
+
+stats for the train set:
+processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w1.png
+dataset mean [0.02645905 0.02645905 0.02645905]
+dataset std [0.03776616 0.03776616 0.03776616]
+processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w2.png
+dataset mean [0.05782904 0.05782904 0.05782904]
+dataset std [0.05301339 0.05301339 0.05301339]
+processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w3.png
+dataset mean [0.0412261 0.0412261 0.0412261]
+dataset std [0.03087561 0.03087561 0.03087561]
+processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w4.png
+dataset mean [0.04099516 0.04099516 0.04099516]
+dataset std [0.03875584 0.03875584 0.03875584]
+processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w5.png
+dataset mean [0.02156723 0.02156723 0.02156723]
+dataset std [0.02616441 0.02616441 0.02616441]
+processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w6.png
+dataset mean [0.03849208 0.03849208 0.03849208]
+dataset std [0.03077043 0.03077043 0.03077043]
+
+stats for the test set:
+/home/cppg/dev/kaggle/recursion_cellular_images/data/test/**/*_w1.png
+dataset mean [0.01644124 0.01644124 0.01644124]
+dataset std [0.02103724 0.02103724 0.02103724]
+processing /home/cppg/dev/kaggle/recursion_cellular_images/data/test/**/*_w2.png
+dataset mean [0.06695988 0.06695988 0.06695988]
+dataset std [0.0612395 0.0612395 0.0612395]
+processing /home/cppg/dev/kaggle/recursion_cellular_images/data/test/**/*_w3.png
+dataset mean [0.03670188 0.03670188 0.03670188]
+dataset std [0.02534438 0.02534438 0.02534438]
+

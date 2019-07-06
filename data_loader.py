@@ -21,8 +21,6 @@ from tqdm import tqdm
 from debug import dprint
 from scipy.stats import describe
 
-from rxrx1.rxrx.io import load_site_as_rgb
-
 
 class ImageDataset(torch.utils.data.Dataset): # type: ignore
     def __init__(self, dataframe: pd.DataFrame, controls_df: pd.DataFrame,
@@ -35,7 +33,7 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         self.mode = mode
 
         self.version = config.version
-        self.path = config.data.train_dir if mode != 'test' else config.data.test_dir
+        self.path = config.train.path if mode != 'test' else config.test.path
         self.num_classes = config.model.num_classes
         self.image_size = config.model.image_size
         self.num_ttas = num_ttas
@@ -65,70 +63,35 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
             self.augmentor = albu.Compose(augmentor, p=1,
                                           additional_targets=targets)
 
-        train_mean = [0.02645905, 0.05782904, 0.0412261, 0.04099516, 0.02156723, 0.03849208]
-        train_std = [0.03776616, 0.05301339, 0.03087561, 0.03875584, 0.02616441, 0.03077043]
+        # train_mean = [0.02645905, 0.05782904, 0.0412261, 0.04099516, 0.02156723, 0.03849208]
+        # train_std = [0.03776616, 0.05301339, 0.03087561, 0.03875584, 0.02616441, 0.03077043]
+        #
+        # self.transforms = transforms.Compose([
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(
+        #         mean=train_mean[:self.num_channels],
+        #         std=train_std[:self.num_channels])
+        # ])
 
-        self.transforms = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(
-                # mean=[0.485, 0.456, 0.406] * 2,
-                # std=[0.229, 0.224, 0.225] * 2)
-                mean=train_mean[:self.num_channels],
-                std=train_std[:self.num_channels])
-        ])
-
-        '''
-        stats for the train set:
-        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w1.png
-        dataset mean [0.02645905 0.02645905 0.02645905]
-        dataset std [0.03776616 0.03776616 0.03776616]
-        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w2.png
-        dataset mean [0.05782904 0.05782904 0.05782904]
-        dataset std [0.05301339 0.05301339 0.05301339]
-        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w3.png
-        dataset mean [0.0412261 0.0412261 0.0412261]
-        dataset std [0.03087561 0.03087561 0.03087561]
-        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w4.png
-        dataset mean [0.04099516 0.04099516 0.04099516]
-        dataset std [0.03875584 0.03875584 0.03875584]
-        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w5.png
-        dataset mean [0.02156723 0.02156723 0.02156723]
-        dataset std [0.02616441 0.02616441 0.02616441]
-        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/train/**/*_w6.png
-        dataset mean [0.03849208 0.03849208 0.03849208]
-        dataset std [0.03077043 0.03077043 0.03077043]
-
-        stats for the test set:
-        /home/cppg/dev/kaggle/recursion_cellular_images/data/test/**/*_w1.png
-        dataset mean [0.01644124 0.01644124 0.01644124]
-        dataset std [0.02103724 0.02103724 0.02103724]
-        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/test/**/*_w2.png
-        dataset mean [0.06695988 0.06695988 0.06695988]
-        dataset std [0.0612395 0.0612395 0.0612395]
-        processing /home/cppg/dev/kaggle/recursion_cellular_images/data/test/**/*_w3.png
-        dataset mean [0.03670188 0.03670188 0.03670188]
-        dataset std [0.02534438 0.02534438 0.02534438]
-        '''
-
-        # if 'ception' in config.model.arch:
-        #     self.transforms = transforms.Compose([
-        #         transforms.ToTensor(),
-        #         transforms.Normalize(mean=[0.5, 0.5, 0.5],
-        #                               std=[0.5, 0.5, 0.5])
-        #     ])
-        # else:
-        #     self.transforms = transforms.Compose([
-        #         transforms.ToTensor(),
-        #         transforms.Normalize(mean=[0.485, 0.456, 0.406],
-        #                               std=[0.229, 0.224, 0.225]),
-        #     ])
+        if 'ception' in config.model.arch:
+            self.transforms = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.5, 0.5, 0.5],
+                                      std=[0.5, 0.5, 0.5])
+            ])
+        else:
+            self.transforms = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                      std=[0.229, 0.224, 0.225]),
+            ])
 
     def _load_image(self, path: str) -> np.array:
         ''' Loads image into np.array with optional resize. '''
         image = Image.open(path)
 
-        if self.image_size != 0:
-            image = image.resize((self.image_size, self.image_size), Image.LANCZOS)
+        # if self.image_size != 0:
+        #     image = image.resize((self.image_size, self.image_size), Image.LANCZOS)
 
         return np.array(image)
 
@@ -136,20 +99,9 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         df_index, site = index // 2, index % 2
         exp, plate, well = self.df.iloc[df_index, 1], self.df.iloc[df_index, 2], \
                            self.df.iloc[df_index, 3],
-        layers = []
 
-        for channel in range(self.num_channels):
-            filename = f'{exp}/Plate{plate}/{well}_s{site+1}_w{channel+1}.png'
-            layers.append(self._load_image(os.path.join(self.path, filename)))
-
-        # neg_ctl_well = self.neg_control[f'{exp}_{plate}']
-        #
-        # for channel in range(self.num_channels):
-        #     filename = f'{exp}/Plate{plate}/{neg_ctl_well}_s{site+1}_w{channel+1}.png'
-        #     layers.append(self._load_image(os.path.join(self.path, filename)))
-
-        image = np.dstack(layers)
-        return image
+        filename = f'{exp}/Plate{plate}/{well}_s{site+1}_rgb.png'
+        return self._load_image(os.path.join(self.path, filename))
 
     # def _load_images(self, index: int) -> np.array:
     #     df_index, site = index // 2, index % 2 + 1
