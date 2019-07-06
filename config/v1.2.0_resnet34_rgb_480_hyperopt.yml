@@ -3,7 +3,7 @@ model:
     arch: 'resnet34'
     type: 'ClassifierModel'
     image_size: 512
-    input_size: 448
+    input_size: 480
     num_classes: 1108
     num_channels: 3
     dropout: 0.5
