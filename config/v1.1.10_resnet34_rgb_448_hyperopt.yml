@@ -1,12 +1,12 @@
 
 model:
-    arch: 'resnet18'
+    arch: 'resnet34'
     type: 'ClassifierModel'
     image_size: 512
-    input_size: 480
+    input_size: 448
     num_classes: 1108
     num_channels: 3
-    dropout: 0.75
+    dropout: 0.5
 
 train:
     path: 'data/train_rgb_512'
@@ -17,9 +17,9 @@ train:
     # warmup:
     #     steps: 5000
     #     max_lr: 1e-4
-    mixup:
-        enable: true
-        beta_a: 0.3
+    # mixup:
+    #     enable: true
+    #     beta_a: 0.3
 
 test:
     batch_size: 16
