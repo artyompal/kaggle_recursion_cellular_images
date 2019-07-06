@@ -43,7 +43,6 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.data.rect_crop.enable = False
     cfg.data.min_ratio = 0.08
     cfg.data.max_ratio = 1.0
-    cfg.data.scale_both_dims = False
 
     cfg.train = edict()
     cfg.train.csv = 'train.csv'
@@ -138,6 +137,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.hyperopt.augmentations = edict()
     cfg.hyperopt.augmentations.hflip = edict()
     cfg.hyperopt.augmentations.vflip = edict()
+    cfg.hyperopt.augmentations.rotate = edict()
     cfg.hyperopt.augmentations.rotate90 = edict()
     cfg.hyperopt.augmentations.affine = edict()
     cfg.hyperopt.augmentations.noise = edict()

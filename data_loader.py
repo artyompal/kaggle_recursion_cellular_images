@@ -23,7 +23,7 @@ from scipy.stats import describe
 
 
 class ImageDataset(torch.utils.data.Dataset): # type: ignore
-    def __init__(self, dataframe: pd.DataFrame, controls_df: pd.DataFrame,
+    def __init__(self, dataframe: pd.DataFrame, controls_df: Optional[pd.DataFrame],
                  mode: str, config: Any, num_ttas: int = 1,
                  augmentor: Any = None, debug_save: bool = False) -> None:
         print(f'creating data_loader for {config.version} in mode={mode}')
@@ -39,39 +39,12 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         self.num_ttas = num_ttas
         self.num_channels = config.model.num_channels
         self.debug_save = debug_save
+        self.augmentor = augmentor
 
-
-        # load negative control information
-        self.neg_control: Dict[str, str] = {}
-        controls_df = controls_df.loc[controls_df.well_type == 'negative_control']
-
-        for row in controls_df.itertuples():
-            exp_plate = f'{row.experiment}_{row.plate}'
-            self.neg_control[exp_plate] = row.well
-
-        # check if there's negative control for every sample
-        for row in self.df.itertuples():
-            exp_plate = f'{row.experiment}_{row.plate}'
-            assert self.neg_control[exp_plate] != ''
-
-
-        # if we use augmentations, create group transform
-        self.augmentor = None
-
-        if augmentor is not None:
-            targets = {'image1': 'image'}
-            self.augmentor = albu.Compose(augmentor, p=1,
-                                          additional_targets=targets)
-
-        # train_mean = [0.02645905, 0.05782904, 0.0412261, 0.04099516, 0.02156723, 0.03849208]
-        # train_std = [0.03776616, 0.05301339, 0.03087561, 0.03875584, 0.02616441, 0.03077043]
-        #
-        # self.transforms = transforms.Compose([
-        #     transforms.ToTensor(),
-        #     transforms.Normalize(
-        #         mean=train_mean[:self.num_channels],
-        #         std=train_std[:self.num_channels])
-        # ])
+        # # concat positive control
+        # if controls_df is not None:
+        #     controls_df = controls_df.loc[controls_df.well_type == 'positive_control']
+        #     self.df = pd.concat([self.df, controls_df], sort=False)
 
         if 'ception' in config.model.arch:
             self.transforms = transforms.Compose([
@@ -86,46 +59,14 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
                                       std=[0.229, 0.224, 0.225]),
             ])
 
-    def _load_image(self, path: str) -> np.array:
-        ''' Loads image into np.array with optional resize. '''
-        image = Image.open(path)
-
-        # if self.image_size != 0:
-        #     image = image.resize((self.image_size, self.image_size), Image.LANCZOS)
-
-        return np.array(image)
-
-    def _load_images(self, index: int) -> np.array:
+    def _load_image(self, index: int) -> np.array:
         df_index, site = index // 2, index % 2
         exp, plate, well = self.df.iloc[df_index, 1], self.df.iloc[df_index, 2], \
                            self.df.iloc[df_index, 3],
 
         filename = f'{exp}/Plate{plate}/{well}_s{site+1}_rgb.png'
-        return self._load_image(os.path.join(self.path, filename))
-
-    # def _load_images(self, index: int) -> np.array:
-    #     df_index, site = index // 2, index % 2 + 1
-    #     dataset = 'train' if self.mode != 'test' else 'test'
-    #     exp, plate, well = self.df.iloc[df_index, 1], self.df.iloc[df_index, 2], \
-    #                        self.df.iloc[df_index, 3]
-    #     sirna_img = load_site_as_rgb(dataset, exp, plate, well, site,
-    #                                  base_path='data')
-    #
-    #     neg_ctl_well = self.neg_control[f'{exp}_{plate}']
-    #     neg_ctl_img = load_site_as_rgb(dataset, exp, plate, neg_ctl_well, site,
-    #                              base_path='data')
-    #
-    #     sirna_img = sirna_img.astype(np.uint8)
-    #     neg_ctl_img = neg_ctl_img.astype(np.uint8)
-    #
-    #     if self.image_size != 0:
-    #         sirna_img = Image.fromarray(sirna_img).resize((self.image_size, self.image_size), Image.LANCZOS)
-    #         sirna_img = np.array(sirna_img)
-    #
-    #         neg_ctl_img = Image.fromarray(neg_ctl_img).resize((self.image_size, self.image_size), Image.LANCZOS)
-    #         neg_ctl_img = np.array(neg_ctl_img)
-    #
-    #     return np.dstack([sirna_img, neg_ctl_img])
+        image = Image.open(os.path.join(self.path, filename))
+        return np.array(image)
 
     def _transform_images(self, image: np.array, index: int) -> torch.Tensor:
         ''' Applies augmentations, if any. '''
@@ -155,7 +96,7 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
 
     def __getitem__(self, index: int) -> Any:
         ''' Returns: tuple (sample, target) '''
-        image = self._load_images(index)
+        image = self._load_image(index)
 
         if self.num_ttas == 1:
             image = self._transform_images(image, index)

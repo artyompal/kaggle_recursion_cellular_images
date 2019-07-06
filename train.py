@@ -114,6 +114,8 @@ def load_data(fold: int) -> Any:
         augs.append(albu.VerticalFlip(.5))
     if config.augmentations.rotate90:
         augs.append(albu.RandomRotate90())
+    if config.augmentations.rotate:
+        augs.append(albu.Rotate())
 
     if config.augmentations.affine == 'soft':
         augs.append(albu.ShiftScaleRotate(shift_limit=0.075, scale_limit=0.15, rotate_limit=10, p=.75))
@@ -128,27 +130,27 @@ def load_data(fold: int) -> Any:
                                    image_size=config.model.image_size,
                                    input_size=config.model.input_size))
 
-    if config.augmentations.noise != 0:
+    if config.augmentations.noise >= 0.1:
         augs.append(albu.OneOf([
             albu.IAAAdditiveGaussianNoise(),
             albu.GaussNoise(),
         ], p=config.augmentations.noise))
 
-    if config.augmentations.blur != 0:
+    if config.augmentations.blur >= 0.1:
         augs.append(albu.OneOf([
             albu.MotionBlur(p=.2),
             albu.MedianBlur(blur_limit=3, p=0.1),
             albu.Blur(blur_limit=3, p=0.1),
         ], p=config.augmentations.blur))
 
-    if config.augmentations.distortion != 0:
+    if config.augmentations.distortion >= 0.1:
         augs.append(albu.OneOf([
             albu.OpticalDistortion(p=0.3),
             albu.GridDistortion(p=.1),
             albu.IAAPiecewiseAffine(p=0.3),
         ], p=config.augmentations.distortion))
 
-    if config.augmentations.color != 0:
+    if config.augmentations.color >= 0.1:
         augs.append(albu.OneOf([
             albu.CLAHE(clip_limit=2),
             albu.IAASharpen(),
@@ -156,7 +158,7 @@ def load_data(fold: int) -> Any:
             albu.RandomBrightnessContrast(),
         ], p=config.augmentations.color))
 
-    if config.augmentations.erase.prob != 0:
+    if config.augmentations.erase.prob >= 0.1:
         augs.append(RandomErase(min_area=config.augmentations.erase.min_area,
                                 max_area=config.augmentations.erase.max_area,
                                 min_ratio=config.augmentations.erase.min_ratio,
@@ -195,7 +197,7 @@ def load_data(fold: int) -> Any:
                                mode='val', config=config,
                                num_ttas=num_ttas_for_val, augmentor=transform_test)
 
-    test_dataset = ImageDataset(test_df, test_controls,
+    test_dataset = ImageDataset(test_df, None,
                                 mode='test', config=config,
                                 num_ttas=config.test.num_ttas,
                                 augmentor=transform_test)
