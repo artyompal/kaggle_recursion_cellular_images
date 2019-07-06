@@ -10,7 +10,7 @@ model:
 
 train:
     path: 'data/train_rgb_512'
-    batch_size: 32
+    batch_size: 24
     max_steps_per_epoch: 15000
     # enable_warmup: true
     num_epochs: 1
