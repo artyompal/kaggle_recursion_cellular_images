@@ -19,32 +19,28 @@ def convert_image(path: str) -> int:
     ''' Loads image file, crops it and resizes into the proper resolution. '''
     try:
         img = Image.open(path)
-
-        if img.size != (image_size, image_size):
-            img = img.resize((image_size, image_size), resample=Image.LANCZOS)
-
         layers = [np.array(img)]
 
         for plane in range(2, 7):
             mod_path = path.replace('_w1.', f'_w{plane}.')
             img = Image.open(mod_path)
-
-            if img.size != (image_size, image_size):
-                img = img.resize((image_size, image_size), resample=Image.LANCZOS)
-
             layers.append(np.array(img))
 
         img = np.dstack(layers)
 
         img = convert_tensor_to_rgb(img)
         img = img.astype(np.uint8)
+        img = Image.fromarray(img)
+
+        if img.size != (image_size, image_size):
+            img = img.resize((image_size, image_size), resample=Image.LANCZOS)
 
         assert path.startswith(source_dir)
         dest = os.path.join(dest_dir, path[len(source_dir) + 1:])
         dest = dest.replace('_w1.', '_rgb.')
 
         os.makedirs(os.path.dirname(dest), exist_ok=True)
-        Image.fromarray(img).save(dest)
+        img.save(dest)
         return 0
     except IOError:
         print(f'{path}: read/write error')
