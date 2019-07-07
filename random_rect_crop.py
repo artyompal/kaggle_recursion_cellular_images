@@ -9,14 +9,14 @@ from PIL import Image
 
 
 class RandomRectCrop(albu.DualTransform):
-    def __init__(self, rect_min_area, rect_min_ratio, image_size, input_size,
+    def __init__(self, min_area, max_area, min_ratio, max_ratio, image_size, input_size,
                  always_apply=True, p=1.0) -> None:
         super().__init__(always_apply, p)
-        assert rect_min_area > 0 and rect_min_area < 1
-        assert rect_min_ratio > 0 and rect_min_ratio < 1
+        assert min_area >= 0 and min_area <= max_area and max_area <= 1.0
+        assert min_ratio > 0 and min_ratio <= max_ratio
 
-        self.rect_min_area = rect_min_area
-        self.rect_min_ratio = rect_min_ratio
+        self.min_area = min_area
+        self.min_ratio = min_ratio
         self.image_size = image_size
         self.input_size = input_size
 
@@ -28,8 +28,8 @@ class RandomRectCrop(albu.DualTransform):
         return np.array(img)
 
     def get_params(self):
-        area = random.uniform(self.rect_min_area, 1)
-        ratio = random.uniform(self.rect_min_ratio, 1 / self.rect_min_ratio)
+        area = random.uniform(self.min_area, self.max_area)
+        ratio = random.uniform(self.min_ratio, self.max_ratio)
 
         h = min(int(((area / ratio) ** 0.5) * self.image_size), self.image_size)
         w = min(int(((area * ratio) ** 0.5) * self.image_size), self.image_size)

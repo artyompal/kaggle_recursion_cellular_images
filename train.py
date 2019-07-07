@@ -125,8 +125,10 @@ def load_data(fold: int) -> Any:
         augs.append(albu.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.50, rotate_limit=45, p=.75))
 
     if config.augmentations.rect_crop.enable:
-        augs.append(RandomRectCrop(rect_min_area=config.augmentations.rect_crop.rect_min_area,
-                                   rect_min_ratio=config.augmentations.rect_crop.rect_min_ratio,
+        augs.append(RandomRectCrop(min_area=config.augmentations.rect_crop.min_area,
+                                   max_area=config.augmentations.rect_crop.max_area,
+                                   min_ratio=config.augmentations.rect_crop.min_ratio,
+                                   max_ratio=config.augmentations.rect_crop.max_ratio,
                                    image_size=config.model.image_size,
                                    input_size=config.model.input_size))
 

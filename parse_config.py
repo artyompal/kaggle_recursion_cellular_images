@@ -111,8 +111,10 @@ def _get_default_config(filename: str, fold: int) -> edict:
 
     cfg.augmentations.rect_crop = edict()
     cfg.augmentations.rect_crop.enable = False
-    cfg.augmentations.rect_crop.rect_min_area = 0.08
-    cfg.augmentations.rect_crop.rect_min_ratio = 1.0
+    cfg.augmentations.rect_crop.min_area = 0.08
+    cfg.augmentations.rect_crop.max_area = 1.0
+    cfg.augmentations.rect_crop.min_ratio = 0.33
+    cfg.augmentations.rect_crop.min_ratio = 1.33
 
     cfg.augmentations.noise = 0
     cfg.augmentations.blur = 0
