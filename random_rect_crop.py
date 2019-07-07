@@ -16,7 +16,9 @@ class RandomRectCrop(albu.DualTransform):
         assert min_ratio > 0 and min_ratio <= max_ratio
 
         self.min_area = min_area
+        self.max_area = max_area
         self.min_ratio = min_ratio
+        self.max_ratio = max_ratio
         self.image_size = image_size
         self.input_size = input_size
 
