@@ -38,12 +38,6 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.model.dropout = 0
     cfg.model.num_channels = 3
 
-    cfg.data = edict()
-    cfg.data.rect_crop = edict()
-    cfg.data.rect_crop.enable = False
-    cfg.data.min_ratio = 0.08
-    cfg.data.max_ratio = 1.0
-
     cfg.train = edict()
     cfg.train.csv = 'train.csv'
     cfg.train.path = 'data/train'
@@ -117,8 +111,8 @@ def _get_default_config(filename: str, fold: int) -> edict:
 
     cfg.augmentations.rect_crop = edict()
     cfg.augmentations.rect_crop.enable = False
-    cfg.augmentations.rect_crop.rect_min_area = 0.1
-    cfg.augmentations.rect_crop.rect_min_ratio = 0.75
+    cfg.augmentations.rect_crop.rect_min_area = 0.08
+    cfg.augmentations.rect_crop.rect_min_ratio = 1.0
 
     cfg.augmentations.noise = 0
     cfg.augmentations.blur = 0

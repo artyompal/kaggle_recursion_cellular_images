@@ -3,6 +3,7 @@ data
 models
 debug_images*
 logs
+submissions
 *.csv
 *.pkl
 *.pth
