@@ -18,7 +18,7 @@ from debug import dprint
 
 
 IN_KERNEL = os.environ.get('KAGGLE_WORKING_DIR') is not None
-INPUT_PATH = '../input/imet-2019-fgvc6/' if IN_KERNEL else '../input/'
+INPUT_PATH = '../input/imet-2019-fgvc6/' if IN_KERNEL else 'data/'
 NUM_CLASSES = 1103
 
 if __name__ == '__main__':
@@ -29,14 +29,19 @@ if __name__ == '__main__':
     predict = np.load(sys.argv[1])
     dprint(predict.shape)
 
+    sz = predict.shape[0] // 2
+    predict = np.mean(np.dstack([predict[:sz], predict[sz:]]), axis=2)
+    labels = np.argmax(predict, axis=1)
+
     sub = pd.read_csv(INPUT_PATH + 'sample_submission.csv')
     assert sub.shape[0] == predict.shape[0]
 
-    labels = [" ".join([str(i) for i, p in enumerate(pred) if p > 0])
-              for pred in tqdm(predict, disable=IN_KERNEL)]
     dprint(len(labels))
     print('labels')
     print(np.array(labels))
 
-    sub['attribute_ids'] = labels
-    sub.to_csv(os.path.splitext(os.path.basename(sys.argv[1]))[0] + '.csv', index=False)
+    sub['sirna'] = labels
+    filename = os.path.splitext(os.path.basename(sys.argv[1]))[0]
+    if filename.startswith('level1_test_'):
+        filename = filename[12:]
+    sub.to_csv(filename + '.csv', index=False)

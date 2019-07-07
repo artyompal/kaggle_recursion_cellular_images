@@ -22,7 +22,8 @@ train:
     #     beta_a: 0.3
 
 test:
-    batch_size: 16
+    path: 'data/test_rgb_512'
+    batch_size: 32
     # num_ttas: 2
 
 optimizer:

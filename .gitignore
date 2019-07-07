@@ -2,6 +2,7 @@ __pycache__/
 data
 models
 debug_images*
+logs
 *.csv
 *.pkl
 *.pth
