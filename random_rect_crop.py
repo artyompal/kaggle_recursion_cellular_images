@@ -22,7 +22,7 @@ class RandomRectCrop(albu.DualTransform):
         self.image_size = image_size
         self.input_size = input_size
 
-    def apply(self, img, y=0, x=0, h=0, w=0, **params):
+    def apply(self, array, y=0, x=0, h=0, w=0, **params):
         array = array[y : y + h, x : x + w]
 
         img = Image.fromarray(array)
