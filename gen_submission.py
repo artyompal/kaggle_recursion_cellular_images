@@ -29,8 +29,8 @@ if __name__ == '__main__':
     predict = np.load(sys.argv[1])
     dprint(predict.shape)
 
-    sz = predict.shape[0] // 2
-    predict = np.mean(np.dstack([predict[:sz], predict[sz:]]), axis=2)
+    # sz = predict.shape[0] // 2
+    # predict = np.mean(np.dstack([predict[:sz], predict[sz:]]), axis=2)
     labels = np.argmax(predict, axis=1)
 
     sub = pd.read_csv(INPUT_PATH + 'sample_submission.csv')
