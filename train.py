@@ -52,6 +52,7 @@ if not IN_KERNEL:
     import torchsummary
     from hyperopt import hp, tpe, fmin
 
+
 def find_input_file(path: str) -> str:
     return os.path.join(INPUT_PATH, os.path.basename(path))
 
@@ -183,9 +184,9 @@ def load_data(fold: int) -> Any:
     else:
         transform_test = albu.Compose([
             albu.PadIfNeeded(config.model.input_size, config.model.input_size),
-            # albu.CenterCrop(height=config.model.input_size, width=config.model.input_size),
-            albu.RandomCrop(height=config.model.input_size, width=config.model.input_size),
-            albu.HorizontalFlip(.5)
+            albu.CenterCrop(height=config.model.input_size, width=config.model.input_size),
+            # albu.RandomCrop(height=config.model.input_size, width=config.model.input_size)    ,
+            # albu.HorizontalFlip(.5)
         ])
 
 
@@ -388,7 +389,8 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, Optional[torc
     ''' Returns predictions and targets, if any. '''
     model.eval()
 
-    activation = nn.Sigmoid()
+    # activation = nn.Sigmoid()
+    activation = nn.Softmax(dim=1)
     predicts_list, targets_list = [], []
 
     with torch.no_grad():
