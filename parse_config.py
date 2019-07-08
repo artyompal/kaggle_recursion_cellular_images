@@ -106,6 +106,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
 
     cfg.augmentations.hflip = False
     cfg.augmentations.vflip = False
+    cfg.augmentations.rotate = False
     cfg.augmentations.rotate90 = False
     cfg.augmentations.affine = 'none'
 

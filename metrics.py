@@ -60,10 +60,11 @@ def GAP(predicts: torch.Tensor, confs: torch.Tensor, targets: torch.Tensor) -> f
 
         res += true_pos / (i + 1) * rel
 
-    res /= targets.shape[0] # FIXME: incorrect, not all test images depict landmarks
+    res /= targets.shape[0]
     return res
 
 def accuracy(predicts: torch.Tensor, targets: torch.Tensor) -> float:
+    assert predicts.shape == targets.shape
     predicts = np.argmax(predicts.cpu().numpy(), axis=1)
-    targets = targets.cpu().numpy()
+    targets = np.argmax(targets.cpu().numpy(), axis=1)
     return np.mean(predicts == targets)

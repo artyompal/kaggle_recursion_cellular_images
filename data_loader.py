@@ -23,7 +23,7 @@ from scipy.stats import describe
 
 
 class ImageDataset(torch.utils.data.Dataset): # type: ignore
-    def __init__(self, dataframe: pd.DataFrame, controls_df: Optional[pd.DataFrame],
+    def __init__(self, dataframe: pd.DataFrame, controls_df: pd.DataFrame,
                  mode: str, config: Any, num_ttas: int = 1,
                  augmentor: Any = None, debug_save: bool = False) -> None:
         print(f'creating data_loader for {config.version} in mode={mode}')
@@ -39,34 +39,57 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         self.num_ttas = num_ttas
         self.num_channels = config.model.num_channels
         self.debug_save = debug_save
-        self.augmentor = augmentor
 
-        # # concat positive control
-        # if controls_df is not None:
-        #     controls_df = controls_df.loc[controls_df.well_type == 'positive_control']
-        #     self.df = pd.concat([self.df, controls_df], sort=False)
+
+        # if we use augmentations, create group transform
+        self.augmentor = None
+
+        if augmentor is not None:
+            targets = {'image1': 'image'}
+            self.augmentor = albu.Compose(augmentor, p=1,
+                                          additional_targets=targets)
 
         if 'ception' in config.model.arch:
             self.transforms = transforms.Compose([
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5, 0.5, 0.5],
-                                      std=[0.5, 0.5, 0.5])
+                # transforms.Normalize(mean=[0.5, 0.5, 0.5],
+                #                       std=[0.5, 0.5, 0.5])
             ])
         else:
             self.transforms = transforms.Compose([
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                      std=[0.229, 0.224, 0.225]),
+                # transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                #                       std=[0.229, 0.224, 0.225]),
             ])
 
-    def _load_image(self, index: int) -> np.array:
-        df_index, site = index // 2, index % 2
+    def _load_image(self, path: str) -> np.array:
+        ''' Loads image into np.array with optional resize. '''
+        image = Image.open(path)
+
+        if self.image_size != 0:
+            image = image.resize((self.image_size, self.image_size), Image.LANCZOS)
+
+        return np.array(image)
+
+    def _load_images(self, index: int) -> np.array:
+        # df_index, site = index // 2, index % 2
+        site, df_index = index // self.df.shape[0], index % self.df.shape[0]
         exp, plate, well = self.df.iloc[df_index, 1], self.df.iloc[df_index, 2], \
                            self.df.iloc[df_index, 3],
+        layers = []
 
-        filename = f'{exp}/Plate{plate}/{well}_s{site+1}_rgb.png'
-        image = Image.open(os.path.join(self.path, filename))
-        return np.array(image)
+        for channel in range(self.num_channels):
+            filename = f'{exp}/Plate{plate}/{well}_s{site+1}_w{channel+1}.png'
+            layers.append(self._load_image(os.path.join(self.path, filename)))
+
+        # neg_ctl_well = self.neg_control[f'{exp}_{plate}']
+        #
+        # for channel in range(self.num_channels):
+        #     filename = f'{exp}/Plate{plate}/{neg_ctl_well}_s{site+1}_w{channel+1}.png'
+        #     layers.append(self._load_image(os.path.join(self.path, filename)))
+
+        image = np.dstack(layers)
+        return image
 
     def _transform_images(self, image: np.array, index: int) -> torch.Tensor:
         ''' Applies augmentations, if any. '''
@@ -96,7 +119,7 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
 
     def __getitem__(self, index: int) -> Any:
         ''' Returns: tuple (sample, target) '''
-        image = self._load_image(index)
+        image = self._load_images(index)
 
         if self.num_ttas == 1:
             image = self._transform_images(image, index)
@@ -110,11 +133,14 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
             image = torch.stack(crops)
 
         if self.mode != 'test':
-            targets = int(self.df.sirna.values[index // 2])
+            target = int(self.df.sirna.values[index % self.df.shape[0]])
+            targets = np.zeros(self.num_classes, dtype=np.float32)
+            targets[target] = 1
             return image, targets
         else:
             return image
 
     def __len__(self) -> int:
         ''' We have two sets of images per well. '''
-        return self.df.shape[0] * 2
+        # return self.df.shape[0] * 2
+        return self.df.shape[0]

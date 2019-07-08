@@ -388,7 +388,7 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, Optional[torc
     ''' Returns predictions and targets, if any. '''
     model.eval()
 
-    activation = nn.Softmax(dim=0)
+    activation = nn.Sigmoid()
     predicts_list, targets_list = [], []
 
     with torch.no_grad():
