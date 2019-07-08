@@ -67,5 +67,8 @@ def accuracy(predicts: torch.Tensor, targets: torch.Tensor) -> float:
     predicts = np.argmax(predicts.cpu().numpy(), axis=1)
     targets = targets.cpu().numpy()
 
+    if len(targets.shape) == 2:
+        targets = np.argmax(targets, axis=1)
+
     assert predicts.shape == targets.shape
     return np.mean(predicts == targets)

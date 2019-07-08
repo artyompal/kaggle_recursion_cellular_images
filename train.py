@@ -24,7 +24,7 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
 from easydict import EasyDict as edict
@@ -56,35 +56,59 @@ if not IN_KERNEL:
 def find_input_file(path: str) -> str:
     return os.path.join(INPUT_PATH, os.path.basename(path))
 
-def make_folds(df: pd.DataFrame) -> pd.DataFrame:
-    experiments = np.array(sorted(df.experiment.unique()))
+def make_folds(df: pd.DataFrame, policy: str) -> pd.DataFrame:
+    logger.info(f'make_folds: policy is {policy}')
 
-    logger.info('folds:')
-    skf = KFold(config.general.num_folds, shuffle=False)
-    folds_by_exp = {}
+    skf = StratifiedKFold(config.general.num_folds, shuffle=True, random_state=7)
+    folds = -np.ones(df.shape[0], dtype=int)
 
-    for i, (train_index, val_index) in enumerate(skf.split(experiments)):
-        logger.info('-' * 20)
-        logger.info(experiments[train_index])
-        logger.info(experiments[val_index])
+    if policy == 'strat_by_target':
+        for i, (train_idx, val_idx) in enumerate(skf.split(df, df.sirna)):
+            dprint(train_idx.shape)
+            dprint(val_idx.shape)
+            folds[val_idx] = i
+    elif policy == 'strat_by_target_per_type':
+        types = ['HEPG2', 'HUVEC']
+        df['cell_type'] = df.experiment.str.split('-').apply(lambda x: x[0])
 
-        for exp in experiments[val_index]:
-            folds_by_exp[exp] = i
+        part_df = df.loc[df.cell_type == types[0]]
+        print('type', types[0], 'dataframe', df.shape)
 
-    folds = df.experiment.apply(lambda exp: folds_by_exp[exp]).values
-    logger.info(f'fold 0: {sum(folds == 0)}')
-    logger.info(f'fold 1: {sum(folds == 1)}')
-    logger.info(f'fold 2: {sum(folds == 2)}')
-    logger.info(f'fold 3: {sum(folds == 3)}')
-    logger.info(f'fold 4: {sum(folds == 4)}')
+        for i, (train_idx, val_idx) in enumerate(skf.split(part_df, part_df.sirna)):
+            dprint(train_idx.shape)
+            dprint(val_idx.shape)
+            folds[part_df.index[val_idx]] = i
+
+        part_df = df.loc[df.cell_type == types[1]]
+        print('type', types[1], 'dataframe', df.shape)
+
+        for i, (train_idx, val_idx) in enumerate(skf.split(part_df, part_df.sirna)):
+            dprint(train_idx.shape)
+            dprint(val_idx.shape)
+            folds[part_df.index[val_idx]] = i
+
+        part_df = df.loc[(df.cell_type != types[0]) & (df.cell_type != types[1])]
+        print('type other dataframe', df.shape)
+
+        for i, (train_idx, val_idx) in enumerate(skf.split(part_df, part_df.sirna)):
+            dprint(train_idx.shape)
+            dprint(val_idx.shape)
+            folds[part_df.index[val_idx]] = i
+    else:
+        assert False
+
+    assert all(folds != -1)
     return folds
 
 def train_val_split(df: pd.DataFrame, fold: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    if not os.path.exists(config.general.folds_file):
-        folds = make_folds(df)
-        np.save(config.general.folds_file, folds)
+    policy = config.general.validation_policy
+    folds_file = f'folds_{policy}.npy'
+
+    if not os.path.exists(folds_file):
+        folds = make_folds(df, policy)
+        np.save(folds_file, folds)
     else:
-        folds = np.load(config.general.folds_file)
+        folds = np.load(folds_file)
 
     assert folds.shape[0] == df.shape[0]
     return df.loc[folds != fold], df.loc[folds == fold]

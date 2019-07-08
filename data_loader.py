@@ -39,7 +39,7 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         self.num_ttas = num_ttas
         self.num_channels = config.model.num_channels
         self.debug_save = debug_save
-
+        self.use_one_hot = config.loss.name != 'cross_entropy'
 
         # if we use augmentations, create group transform
         self.augmentor = None
@@ -134,6 +134,12 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
 
         if self.mode != 'test':
             target = int(self.df.sirna.values[index % self.df.shape[0]])
+
+            if self.use_one_hot:
+                targets = np.zeros(self.num_classes, dtype=np.float32)
+                targets[target] = 1
+                target = targets
+                
             return image, target
         else:
             return image
