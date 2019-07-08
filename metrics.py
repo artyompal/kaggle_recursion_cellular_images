@@ -64,7 +64,8 @@ def GAP(predicts: torch.Tensor, confs: torch.Tensor, targets: torch.Tensor) -> f
     return res
 
 def accuracy(predicts: torch.Tensor, targets: torch.Tensor) -> float:
-    assert predicts.shape == targets.shape
     predicts = np.argmax(predicts.cpu().numpy(), axis=1)
-    targets = np.argmax(targets.cpu().numpy(), axis=1)
+    targets = targets.cpu().numpy()
+
+    assert predicts.shape == targets.shape
     return np.mean(predicts == targets)
