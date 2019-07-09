@@ -94,6 +94,27 @@ def make_folds(df: pd.DataFrame, policy: str) -> pd.DataFrame:
             dprint(train_idx.shape)
             dprint(val_idx.shape)
             folds[part_df.index[val_idx]] = i
+    elif policy == 'split_by_exp':
+        experiments = [
+            'HEPG2-01', 'HEPG2-02', 'HEPG2-03',
+            'HEPG2-04', 'HEPG2-05', 'HEPG2-06',
+            'HEPG2-07', 'HUVEC-01', 'HUVEC-02',
+            'HUVEC-03', 'HUVEC-04', 'HUVEC-05',
+            'HUVEC-06', 'HUVEC-07', 'HUVEC-08',
+            'HUVEC-09', 'HUVEC-10', 'HUVEC-11',
+            'HUVEC-12', 'HUVEC-13', 'HUVEC-14',
+            'HUVEC-15', 'HUVEC-16', 'RPE-01',
+            'RPE-02', 'RPE-03', 'RPE-04',
+            'RPE-05', 'RPE-06', 'RPE-07',
+            'U2OS-01', 'U2OS-02', 'U2OS-03',
+            ]
+        fold_by_exp = {exp: i % config.general.num_folds
+                       for i, exp in enumerate(experiments)}
+
+        folds = df.experiment.apply(lambda exp: fold_by_exp[exp]).values
+        dprint(sum(folds == 0))
+        dprint(sum(folds == 1))
+        dprint(sum(folds == 2))
     else:
         assert False
 
@@ -348,7 +369,7 @@ def mixup(x: torch.Tensor, y: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]
 
 def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
                 epoch: int, lr_scheduler: Any, lr_scheduler2: Any,
-                max_steps: Optional[int]) -> None:
+                max_steps: Optional[int]) -> float:
     logger.info(f'epoch: {epoch}')
     logger.info(f'learning rate: {get_lr(optimizer)}')
 
@@ -409,6 +430,7 @@ def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
         # FIXME: this prints random accuracy value from the last batch
 
     logger.info(f' * average acc on train {avg_score.avg:.4f}')
+    return avg_score.avg
 
 def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
     ''' Returns predictions and targets, if any. '''
