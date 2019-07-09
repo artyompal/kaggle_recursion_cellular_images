@@ -406,6 +406,7 @@ def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
                         f'loss {losses.val:.4f} ({losses.avg:.4f})\t'
                         f'acc {avg_score.val:.4f} ({avg_score.avg:.4f})'
                         + lr_str)
+        # FIXME: this prints random accuracy value from the last batch
 
     logger.info(f' * average acc on train {avg_score.avg:.4f}')
 
