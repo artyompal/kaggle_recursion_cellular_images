@@ -95,26 +95,19 @@ def make_folds(df: pd.DataFrame, policy: str) -> pd.DataFrame:
             dprint(val_idx.shape)
             folds[part_df.index[val_idx]] = i
     elif policy == 'split_by_exp':
-        experiments = [
-            'HEPG2-01', 'HEPG2-02', 'HEPG2-03',
-            'HEPG2-04', 'HEPG2-05', 'HEPG2-06',
-            'HEPG2-07', 'HUVEC-01', 'HUVEC-02',
-            'HUVEC-03', 'HUVEC-04', 'HUVEC-05',
-            'HUVEC-06', 'HUVEC-07', 'HUVEC-08',
-            'HUVEC-09', 'HUVEC-10', 'HUVEC-11',
-            'HUVEC-12', 'HUVEC-13', 'HUVEC-14',
-            'HUVEC-15', 'HUVEC-16', 'RPE-01',
-            'RPE-02', 'RPE-03', 'RPE-04',
-            'RPE-05', 'RPE-06', 'RPE-07',
-            'U2OS-01', 'U2OS-02', 'U2OS-03',
-            ]
-        fold_by_exp = {exp: i % config.general.num_folds
-                       for i, exp in enumerate(experiments)}
+        experiments = sorted(df.experiment.unique())
+        fold_by_exp = {exp: i % 3 for i, exp in enumerate(experiments)}
 
-        folds = df.experiment.apply(lambda exp: fold_by_exp[exp]).values
-        dprint(sum(folds == 0))
-        dprint(sum(folds == 1))
-        dprint(sum(folds == 2))
+        if config.general.num_folds == 3:
+            folds = df.experiment.apply(lambda exp: fold_by_exp[exp]).values
+        elif config.general.num_folds == 6:
+            folds = df.experiment.apply(lambda exp: fold_by_exp[exp]).values
+            folds += (df.plate % 1) * 3
+        else:
+            assert False
+
+        for f in range(config.general.num_folds):
+            logger.info(f'fold {f}: {sum(folds == f)} rows')
     else:
         assert False
 
@@ -123,7 +116,7 @@ def make_folds(df: pd.DataFrame, policy: str) -> pd.DataFrame:
 
 def train_val_split(df: pd.DataFrame, fold: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
     policy = config.general.validation_policy
-    folds_file = f'folds_{policy}.npy'
+    folds_file = f'folds_{policy}_{config.general.num_folds}.npy'
 
     if not os.path.exists(folds_file):
         folds = make_folds(df, policy)
