@@ -102,7 +102,7 @@ def make_folds(df: pd.DataFrame, policy: str) -> pd.DataFrame:
             folds = df.experiment.apply(lambda exp: fold_by_exp[exp]).values
         elif config.general.num_folds == 6:
             folds = df.experiment.apply(lambda exp: fold_by_exp[exp]).values
-            folds += (df.plate % 1) * 3
+            folds += (df.plate > 2) * 3
         else:
             assert False
 
