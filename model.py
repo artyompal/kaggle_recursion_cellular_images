@@ -55,8 +55,13 @@ def create_classifier_model(config: Any, pretrained: bool) -> Any:
 
     # print(model)
     if num_channels != 3:
-        # block = model.features[0].conv # for ResNet
-        block = model.features[0] # for DenseNet
+        if config.model.arch.startswith('resnet'):
+            block = model.features[0].conv
+        elif config.model.arch.startswith('densenet'):
+            block = model.features[0]
+        else:
+            assert False
+            
         block.conv = nn.Conv2d(in_channels=num_channels,
                                out_channels=block.conv.out_channels,
                                kernel_size=block.conv.kernel_size,
