@@ -17,7 +17,7 @@ train:
     batch_size: 12
     max_steps_per_epoch: 15000
     # enable_warmup: true
-    num_epochs: 1
+    num_epochs: 3
     # warmup:
     #     steps: 5000
     #     max_lr: 1e-4
