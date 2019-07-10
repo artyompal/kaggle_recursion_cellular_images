@@ -4,7 +4,7 @@ general:
     validation_policy: 'split_by_exp'
 
 model:
-    arch: 'resnet34'
+    arch: 'resnet50'
     type: 'ClassifierModel'
     image_size: 512
     input_size: 480
