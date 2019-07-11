@@ -14,10 +14,11 @@ model:
 
 train:
     path: 'data/train'
-    batch_size: 8
+    batch_size: 24
     max_steps_per_epoch: 15000
     # enable_warmup: true
     num_epochs: 1000
+    accum_batches_num: 2
     # warmup:
     #     steps: 5000
     #     max_lr: 1e-4
@@ -32,7 +33,7 @@ test:
 optimizer:
     name: 'adam'
     params:
-        lr: 5e-4
+        lr: 4e-3
 
 scheduler:
     name: 'reduce_lr_on_plateau'
