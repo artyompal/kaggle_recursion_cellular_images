@@ -425,13 +425,17 @@ def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
     logger.info(f' * average acc on train {avg_score.avg:.4f}')
     return avg_score.avg
 
-def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+def inference(data_loader: Any, model: Any) -> Tuple[np.array, Optional[np.array]]:
     ''' Returns predictions and targets, if any. '''
     model.eval()
-
-    # activation = nn.Sigmoid()
-    activation = nn.Softmax(dim=1)
     predicts_list, targets_list = [], []
+
+    if config.loss.name == 'binary_cross_entropy':
+        activation: nn.Module = nn.Sigmoid()
+    elif config.loss.name == 'cross_entropy':
+        activation = nn.Softmax(dim=1)
+    else:
+        assert None
 
     with torch.no_grad():
         for input_data in tqdm(data_loader, disable=IN_KERNEL):
@@ -442,7 +446,7 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, Optional[torc
 
             if data_loader.dataset.num_ttas != 1:
                 bs, ncrops, c, h, w = input_.size()
-                input_ = input_.view(-1, c, h, w) # fuse batch size and ncrops
+                input_ = input_.view(-1, c, h, w)
 
                 output = model(input_)
                 output = activation(output)
@@ -463,6 +467,20 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, Optional[torc
 
     predicts = np.concatenate(predicts_list)
     targets = np.concatenate(targets_list) if targets_list else None
+
+    if config.model.num_sites == 2:
+        sz = predicts.shape[0] // 2
+        dprint(sz)
+
+        if config.test.tta_combine_func == 'max':
+            predicts = np.amax(np.dstack([predicts[:sz], predicts[sz:]]), axis=2)
+        elif config.test.tta_combine_func == 'mean':
+            predicts = np.mean(np.dstack([predicts[:sz], predicts[sz:]]), axis=2)
+        else:
+            assert False
+
+        targets = targets[:sz]
+
     return predicts, targets
 
 def validate(val_loader: Any, model: Any, epoch: int) -> Tuple[float, np.ndarray]:

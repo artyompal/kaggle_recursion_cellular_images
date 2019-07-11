@@ -37,6 +37,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.model.bottleneck_fc = None
     cfg.model.dropout = 0
     cfg.model.num_channels = 3
+    cfg.model.num_sites = 1
 
     cfg.train = edict()
     cfg.train.csv = 'train.csv'

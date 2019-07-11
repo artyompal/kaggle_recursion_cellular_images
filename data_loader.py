@@ -40,6 +40,7 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         self.num_channels = config.model.num_channels
         self.debug_save = debug_save
         self.use_one_hot = config.loss.name != 'cross_entropy'
+        self.num_sites = config.model.num_sites
 
         # if we use augmentations, create group transform
         self.augmentor = None
@@ -49,18 +50,13 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
             self.augmentor = albu.Compose(augmentor, p=1,
                                           additional_targets=targets)
 
-        if 'ception' in config.model.arch:
-            self.transforms = transforms.Compose([
-                transforms.ToTensor(),
-                # transforms.Normalize(mean=[0.5, 0.5, 0.5],
-                #                       std=[0.5, 0.5, 0.5])
-            ])
-        else:
-            self.transforms = transforms.Compose([
-                transforms.ToTensor(),
-                # transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                #                       std=[0.229, 0.224, 0.225]),
-            ])
+        self.transforms = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.02645905, 0.05782904, 0.0412261,
+                                       0.04099516, 0.02156723, 0.03849208],
+                                  std=[0.03776616, 0.05301339, 0.03087561,
+                                       0.03875584, 0.02616441, 0.03077043])
+        ])
 
     def _load_image(self, path: str) -> np.array:
         ''' Loads image into np.array with optional resize. '''
@@ -139,12 +135,11 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
                 targets = np.zeros(self.num_classes, dtype=np.float32)
                 targets[target] = 1
                 target = targets
-                
+
             return image, target
         else:
             return image
 
     def __len__(self) -> int:
         ''' We have two sets of images per well. '''
-        # return self.df.shape[0] * 2
-        return self.df.shape[0]
+        return self.df.shape[0] * self.num_sites
