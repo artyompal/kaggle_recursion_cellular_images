@@ -33,7 +33,7 @@ test:
 optimizer:
     name: 'adam'
     params:
-        lr: 1e-3
+        lr: 1.6e-2
 
 scheduler:
     name: 'reduce_lr_on_plateau'
