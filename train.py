@@ -479,7 +479,8 @@ def inference(data_loader: Any, model: Any) -> Tuple[np.array, Optional[np.array
         else:
             assert False
 
-        targets = targets[:sz]
+        if targets:
+            targets = targets[:sz]
 
     return predicts, targets
 
