@@ -470,7 +470,6 @@ def inference(data_loader: Any, model: Any) -> Tuple[np.array, Optional[np.array
 
     if config.model.num_sites == 2:
         sz = predicts.shape[0] // 2
-        dprint(sz)
 
         if config.test.tta_combine_func == 'max':
             predicts = np.amax(np.dstack([predicts[:sz], predicts[sz:]]), axis=2)
