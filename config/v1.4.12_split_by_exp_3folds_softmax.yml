@@ -1,6 +1,6 @@
 
 general:
-    num_folds: 6
+    num_folds: 3
     validation_policy: 'split_by_exp'
 
 model:
@@ -32,7 +32,7 @@ test:
 optimizer:
     name: 'adam'
     params:
-        lr: 1e-3
+        lr: 1e-4
 
 scheduler:
     name: 'reduce_lr_on_plateau'
@@ -49,4 +49,4 @@ scheduler:
 #     max_period: 5
 
 loss:
-    name: 'binary_cross_entropy'
+    name: 'cross_entropy'
