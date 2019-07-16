@@ -38,7 +38,7 @@ class SiameseModel(nn.Module):
         if self.combine_method == 'concat':
             num_inputs *= 2
 
-        self.fc1 = nn.Linear(num_inputs, elf.fc_layer_width)
+        self.fc1 = nn.Linear(num_inputs, self.fc_layer_width)
         self.batchnorm = nn.BatchNorm1d(self.fc_layer_width)
         self.activation = nn.ReLU()
         self.dropout = nn.Dropout(config.model.dropout) if config.model.dropout else None
