@@ -63,7 +63,6 @@ def _get_default_config(filename: str, fold: int) -> edict:
 
     cfg.train.warmup = edict()
     cfg.train.warmup.steps = None
-    cfg.train.warmup.max_lr = None
 
     cfg.train.lr_finder = edict()
     cfg.train.lr_finder.num_steps = 10 ** 9     # one epoch max

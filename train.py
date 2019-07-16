@@ -536,7 +536,7 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
     if args.weights is None and config.train.head_only_warmup:
         logger.info('-' * 50)
         logger.info(f'doing warmup for {config.train.warmup.epochs} epochs')
-        logger.info(f'max_lr will be {config.train.warmup.max_lr}')
+        logger.info(f'max lr will be {config.optimizer.params.lr}')
 
         optimizer = get_optimizer(config, model.parameters())
         warmup_scheduler = get_warmup_scheduler(config, optimizer, epoch_size)
@@ -551,7 +551,7 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
     if args.weights is None and config.train.enable_warmup:
         logger.info('-' * 50)
         logger.info(f'doing warmup for {config.train.warmup.epochs} epochs')
-        logger.info(f'max_lr will be {config.optimizer.params.lr}')
+        logger.info(f'max lr will be {config.optimizer.params.lr}')
 
         optimizer = get_optimizer(config, model.parameters())
         warmup_scheduler = get_warmup_scheduler(config, optimizer, epoch_size)
