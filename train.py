@@ -44,6 +44,7 @@ from random_rect_crop import RandomRectCrop
 from random_erase import RandomErase
 from model import create_model, freeze_layers, unfreeze_layers
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+from schedulers import CosineLRWithRestarts
 
 IN_KERNEL = os.environ.get('KAGGLE_WORKING_DIR') is not None
 INPUT_PATH = '../input/' if IN_KERNEL else 'data/'
@@ -361,8 +362,7 @@ def mixup(x: torch.Tensor, y: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]
     return x, y
 
 def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
-                epoch: int, lr_scheduler: Any, lr_scheduler2: Any,
-                max_steps: Optional[int]) -> float:
+                epoch: int, lr_scheduler: Any, max_steps: Optional[int]) -> float:
     logger.info(f'epoch: {epoch}')
     logger.info(f'learning rate: {get_lr(optimizer)}')
 
@@ -407,9 +407,6 @@ def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
         if is_scheduler_continuous(lr_scheduler):
             lr_scheduler.step()
             lr_str = f'\tlr {get_lr(optimizer):.02e}'
-        # elif is_scheduler_continuous(lr_scheduler2):
-        #     lr_scheduler2.step()
-        #     lr_str = f'\tlr {get_lr(optimizer):.08f}'
 
         batch_time.update(time.time() - end)
         end = time.time()
@@ -546,7 +543,7 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
 
         freeze_layers(model)
         train_epoch(train_loader, model, criterion, optimizer, 0,
-                    warmup_scheduler, None, config.train.warmup.steps)
+                    warmup_scheduler, config.train.warmup.steps)
         unfreeze_layers(model)
 
     if args.weights is None and config.train.enable_warmup:
@@ -557,7 +554,7 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
         optimizer = get_optimizer(config, model.parameters())
         warmup_scheduler = get_warmup_scheduler(config, optimizer)
         train_epoch(train_loader, model, criterion, optimizer, 0,
-                    warmup_scheduler, None, config.train.warmup.steps)
+                    warmup_scheduler, config.train.warmup.steps)
 
     optimizer = get_optimizer(config, model.parameters())
 
@@ -587,16 +584,9 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
         elif 'base_lr' in config.scheduler.params:
             set_lr(optimizer, config.scheduler.params.base_lr)
 
-    # if not args.cosine:
-    lr_scheduler = get_scheduler(config.scheduler, optimizer, last_epoch=
-                                 (last_epoch if config.scheduler.name != 'cyclic_lr' else -1))
-    #     assert config.scheduler2.name == ''
-    #     lr_scheduler2 = get_scheduler(config.scheduler2, optimizer, last_epoch=last_epoch) \
-    #                     if config.scheduler2.name else None
-    # else:
-    #     epoch_size = min(len(train_loader), config.train.max_steps_per_epoch) \
-    #                  * config.train.batch_size
-    #
+    epoch_size = min(len(train_loader), config.train.max_steps_per_epoch) \
+                 * config.train.batch_size
+
     #     set_lr(optimizer, float(config.cosine.start_lr))
     #     lr_scheduler = CosineLRWithRestarts(optimizer,
     #                                         batch_size=config.train.batch_size,
@@ -604,7 +594,7 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
     #                                         restart_period=config.cosine.period,
     #                                         period_inc=config.cosine.period_inc,
     #                                         max_period=config.cosine.max_period)
-    #     lr_scheduler2 = None
+    lr_scheduler = get_scheduler(config, optimizer, epoch_size=epoch_size)
 
     if args.predict_oof or args.predict_test:
         print('inference mode')
@@ -628,7 +618,7 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
     for epoch in range(last_epoch + 1, config.train.num_epochs):
         logger.info('-' * 50)
 
-        if not is_scheduler_continuous(lr_scheduler): # and lr_scheduler2 is None:
+        if not is_scheduler_continuous(lr_scheduler):
             # if we have just reduced LR, reload the best saved model
             lr = get_lr(optimizer)
 
@@ -643,35 +633,20 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
                 set_lr(optimizer, lr)
                 last_lr = lr
 
-        if config.train.lr_decay_coeff != 0 and epoch in config.train.lr_decay_milestones:
-            n_cycles = config.train.lr_decay_milestones.index(epoch) + 1
-            total_coeff = config.train.lr_decay_coeff ** n_cycles
-            logger.info(f'artificial LR scheduler: made {n_cycles} cycles, decreasing LR by {total_coeff}')
-
-            set_lr(optimizer, config.scheduler.params.base_lr * total_coeff)
-            lr_scheduler = get_scheduler(config.scheduler, optimizer,
-                                         coeff=total_coeff, last_epoch=-1)
-                                         # (last_epoch if config.scheduler.name != 'cyclic_lr' else -1))
-
-        # if isinstance(lr_scheduler, CosineLRWithRestarts):
-        #     restart = lr_scheduler.epoch_step()
-        #     if restart:
-        #         logger.info('cosine annealing restarted, resetting the best metric')
-        #         best_score = min(config.cosine.min_metric_val, best_score)
+        if isinstance(lr_scheduler, CosineLRWithRestarts):
+            restart = lr_scheduler.epoch_step()
+            if restart:
+                logger.info('cosine annealing restarted, resetting the best metric')
+                best_score = min(config.cosine.min_metric_val, best_score)
 
         train_epoch(train_loader, model, criterion, optimizer, epoch,
-                    lr_scheduler, None, config.train.max_steps_per_epoch)
+                    lr_scheduler, config.train.max_steps_per_epoch)
         score, _ = validate(val_loader, model, epoch)
 
-        # if type(lr_scheduler) == ReduceLROnPlateau:
-        lr_scheduler.step(metrics=score)
-        # elif not is_scheduler_continuous(lr_scheduler):
-        #     lr_scheduler.step()
-
-        # if type(lr_scheduler2) == ReduceLROnPlateau:
-        #     lr_scheduler2.step(metrics=score)
-        # elif lr_scheduler2 and not is_scheduler_continuous(lr_scheduler2):
-        #     lr_scheduler2.step()
+        if type(lr_scheduler) == ReduceLROnPlateau:
+            lr_scheduler.step(metrics=score)
+        elif not is_scheduler_continuous(lr_scheduler):
+            lr_scheduler.step()
 
         is_best = score > best_score
         best_score = max(score, best_score)
