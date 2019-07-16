@@ -55,7 +55,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.train.accum_batches_num = 1
     cfg.train.lr_decay_coeff = 0
     cfg.train.lr_decay_milestones = []
-    cfg.train.restart_metric_val = 0
+    cfg.train.restart_metric_val = 1.0
 
     cfg.train.mixup = edict()
     cfg.train.mixup.enable = False
