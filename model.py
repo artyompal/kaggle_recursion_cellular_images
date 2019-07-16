@@ -27,22 +27,39 @@ class SiameseModel(nn.Module):
     ''' Model with two inputs. '''
     def __init__(self, config: Any, pretrained: bool) -> None:
         super().__init__()
-        self.head = create_classifier_model(config, pretrained)
-        self.dropout = nn.Dropout(config.model.dropout) if config.model.dropout else None
-        self.fc = nn.Linear(self.head.output.in_features, config.model.num_classes)
+
         self.num_channels = config.model.num_channels
+        self.fc_layer_width = config.model.fc_layer_width
+        self.combine_method = config.model.combine_method
+
+        self.head = create_classifier_model(config, pretrained)
+
+        self.fc1 = nn.Linear(self.head.output[-1].in_features, self.fc_layer_width)
+        self.batchnorm = nn.BatchNorm1d(self.fc_layer_width)
+        self.activation = nn.ReLU()
+        self.dropout = nn.Dropout(config.model.dropout) if config.model.dropout else None
+        self.fc2 = nn.Linear(config.model.fc_layer_width, config.model.num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor: # type: ignore
         y1 = self.head.features(x[:, :self.num_channels])
         y2 = self.head.features(x[:, self.num_channels:])
 
-        d = y1 - y2
-        y = d.view(d.size(0), -1)
+        y1 = y1.view(y1.size(0), -1)
+        y2 = y2.view(y2.size(0), -1)
+
+        if self.combine_method == 'subtract':
+            y = y1 - y2
+        else:
+            assert False
+
+        y = self.fc1(y)
+        y = self.batchnorm(y)
+        y = self.activation(y)
 
         if self.dropout is not None:
             y = self.dropout(y)
 
-        y = self.fc(y)
+        y = self.fc2(y)
         return y
 
 def create_classifier_model(config: Any, pretrained: bool) -> Any:
@@ -53,7 +70,6 @@ def create_classifier_model(config: Any, pretrained: bool) -> Any:
     else:
         model = get_model(config.model.arch, pretrained=pretrained, root='../input/pytorchcv-models/')
 
-    # print(model)
     if num_channels != 3:
         if config.model.arch.startswith('resnet'):
             block = model.features[0].conv
@@ -61,7 +77,7 @@ def create_classifier_model(config: Any, pretrained: bool) -> Any:
             block = model.features[0]
         else:
             assert False
-            
+
         block.conv = nn.Conv2d(in_channels=num_channels,
                                out_channels=block.conv.out_channels,
                                kernel_size=block.conv.kernel_size,

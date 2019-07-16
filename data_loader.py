@@ -41,21 +41,38 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         self.debug_save = debug_save
         self.use_one_hot = config.loss.name != 'cross_entropy'
         self.num_sites = config.model.num_sites
+        self.siamese_input = config.model.type == 'SiameseModel'
+
+
+        # load negative control information
+        self.neg_control: Dict[str, str] = {}
+        controls_df = controls_df.loc[controls_df.well_type == 'negative_control']
+
+        for row in controls_df.itertuples():
+            exp_plate = f'{row.experiment}_{row.plate}'
+            self.neg_control[exp_plate] = row.well
+
+        # check if there's negative control for every sample
+        for row in self.df.itertuples():
+            exp_plate = f'{row.experiment}_{row.plate}'
+            assert self.neg_control[exp_plate] != ''
+
 
         # if we use augmentations, create group transform
         self.augmentor = None
 
         if augmentor is not None:
-            targets = {'image1': 'image'}
+            targets = {'image1': 'image', 'image2': 'image', 'image3': 'image'}
             self.augmentor = albu.Compose(augmentor, p=1,
                                           additional_targets=targets)
 
+        rep = 2 if config.model.type == 'SiameseModel' else 1
         self.transforms = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.02645905, 0.05782904, 0.0412261,
-                                       0.04099516, 0.02156723, 0.03849208],
+                                       0.04099516, 0.02156723, 0.03849208] * rep,
                                   std=[0.03776616, 0.05301339, 0.03087561,
-                                       0.03875584, 0.02616441, 0.03077043])
+                                       0.03875584, 0.02616441, 0.03077043] * rep)
         ])
 
     def _load_image(self, path: str) -> np.array:
@@ -68,21 +85,21 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         return np.array(image)
 
     def _load_images(self, index: int) -> np.array:
-        # df_index, site = index // 2, index % 2
         site, df_index = index // self.df.shape[0], index % self.df.shape[0]
         exp, plate, well = self.df.iloc[df_index, 1], self.df.iloc[df_index, 2], \
-                           self.df.iloc[df_index, 3],
+                           self.df.iloc[df_index, 3]
         layers = []
 
         for channel in range(self.num_channels):
             filename = f'{exp}/Plate{plate}/{well}_s{site+1}_w{channel+1}.png'
             layers.append(self._load_image(os.path.join(self.path, filename)))
 
-        # neg_ctl_well = self.neg_control[f'{exp}_{plate}']
-        #
-        # for channel in range(self.num_channels):
-        #     filename = f'{exp}/Plate{plate}/{neg_ctl_well}_s{site+1}_w{channel+1}.png'
-        #     layers.append(self._load_image(os.path.join(self.path, filename)))
+        if self.siamese_input:
+            neg_ctl_well = self.neg_control[f'{exp}_{plate}']
+
+            for channel in range(self.num_channels):
+                filename = f'{exp}/Plate{plate}/{neg_ctl_well}_s{site+1}_w{channel+1}.png'
+                layers.append(self._load_image(os.path.join(self.path, filename)))
 
         image = np.dstack(layers)
         return image
@@ -93,10 +110,20 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
             if self.num_channels == 3:
                 image = self.augmentor(image=image)['image']
             elif self.num_channels == 6:
-                image0, image1 = image[:, :, :3], image[:, :, 3:]
-                results = self.augmentor(image=image0, image1=image1)
-                image0, image1 = results['image'], results['image1']
-                image = np.dstack([image0, image1])
+                if not self.siamese_input:
+                    image0, image1 = image[:, :, :3], image[:, :, 3:]
+                    results = self.augmentor(image=image0, image1=image1)
+                    image0, image1 = results['image'], results['image1']
+                    image = np.dstack([image0, image1])
+                else:
+                    image0, image1, image2, image3 = image[:, :, :3], image[:, :, 3:6], \
+                                                     image[:, :, 6:9], image[:, :, 9:]
+                    results = self.augmentor(image=image0, image1=image1,
+                                             image2=image2, image3=image3)
+                    image0, image1, image2, image3 = results['image'], results['image1'], \
+                                                     results['image2'], results['image3']
+
+                    image = np.dstack([image0, image1, image2, image3])
             else:
                 raise RuntimeError('unsupported number of channels')
 

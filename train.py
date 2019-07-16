@@ -137,14 +137,15 @@ def load_data(fold: int) -> Any:
 
     full_df = pd.read_csv(find_input_file(config.train.csv))
     train_controls = pd.read_csv(find_input_file('train_controls.csv'))
+    test_df = pd.read_csv(find_input_file(config.test.csv))
+    test_controls = pd.read_csv(find_input_file('test_controls.csv'))
 
     print('full_df', full_df.shape)
     train_df, val_df = train_val_split(full_df, fold)
     print('train_df', train_df.shape)
     print('val_df', val_df.shape)
-
-    test_df = pd.read_csv(find_input_file(config.test.csv))
-    test_controls = pd.read_csv(find_input_file('test_controls.csv'))
+    print('train_controls', train_controls.shape)
+    print('test_controls', test_controls.shape)
 
     augs: List[Union[albu.BasicTransform, albu.OneOf]] = []
 
@@ -239,7 +240,7 @@ def load_data(fold: int) -> Any:
                                mode='val', config=config,
                                num_ttas=num_ttas_for_val, augmentor=transform_test)
 
-    test_dataset = ImageDataset(test_df, None,
+    test_dataset = ImageDataset(test_df, test_controls,
                                 mode='test', config=config,
                                 num_ttas=config.test.num_ttas,
                                 augmentor=transform_test)
