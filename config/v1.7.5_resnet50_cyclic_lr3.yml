@@ -35,11 +35,11 @@ optimizer:
         lr: 1e-4
 
 scheduler:
-   name: 'cyclic_lr'
-   params:
-       max_lr: 1e-4
-       base_lr: 3e-6
-       epochs_up: 3
+    name: 'cyclic_lr'
+    params:
+        max_lr: 1e-4
+        base_lr: 3e-6
+        epochs_up: 3
 
 loss:
     name: 'cross_entropy'
