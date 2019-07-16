@@ -34,7 +34,11 @@ class SiameseModel(nn.Module):
 
         self.head = create_classifier_model(config, pretrained)
 
-        self.fc1 = nn.Linear(self.head.output[-1].in_features, self.fc_layer_width)
+        num_inputs = self.head.output[-1].in_features
+        if self.combine_method == 'concat':
+            num_inputs *= 2
+
+        self.fc1 = nn.Linear(num_inputs, elf.fc_layer_width)
         self.batchnorm = nn.BatchNorm1d(self.fc_layer_width)
         self.activation = nn.ReLU()
         self.dropout = nn.Dropout(config.model.dropout) if config.model.dropout else None
@@ -49,6 +53,8 @@ class SiameseModel(nn.Module):
 
         if self.combine_method == 'subtract':
             y = y1 - y2
+        elif self.combine_method == 'concat':
+            y = torch.cat([y1, y2], dim=1)
         else:
             assert False
 
