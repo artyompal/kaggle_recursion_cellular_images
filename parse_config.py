@@ -55,6 +55,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.train.accum_batches_num = 1
     cfg.train.lr_decay_coeff = 0
     cfg.train.lr_decay_milestones = []
+    cfg.train.restart_metric_val = 0
 
     cfg.train.mixup = edict()
     cfg.train.mixup.enable = False
@@ -87,16 +88,6 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.scheduler = edict()
     cfg.scheduler.name = ''
     cfg.scheduler.params = edict()
-
-    cfg.scheduler2 = edict()
-    cfg.scheduler2.name = ''
-    cfg.scheduler2.params = edict()
-
-    cfg.cosine = edict()
-    cfg.cosine.period = 1
-    cfg.cosine.period_inc = 1
-    cfg.cosine.max_period = 1000
-    cfg.cosine.min_metric_val = 0.6
 
     cfg.loss = edict()
     cfg.loss.name = 'none'

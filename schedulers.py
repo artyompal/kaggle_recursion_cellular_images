@@ -3,12 +3,13 @@
 import json
 import math
 
+from typing import Any, Tuple
+
+import numpy as np
 import torch
 import torch.optim.lr_scheduler as lr_sched
 
-from typing import Any, Tuple
 from torch.optim import Optimizer
-
 from optimizers import set_lr
 
 
@@ -104,7 +105,7 @@ class CosineLRWithRestarts():
     def _set_batch_size(self) -> None:
         d, r = divmod(self.epoch_size, self.batch_size)
         batches_in_epoch = d + 2 if r > 0 else d + 1
-        self.batch_increment = iter(torch.linspace(0, 1, batches_in_epoch))
+        self.batch_increment = iter(np.linspace(0, 1, batches_in_epoch))
 
     def epoch_step(self) -> bool:
         ''' Returns true if we started new cosine anneal period this epoch. '''
@@ -161,7 +162,7 @@ def reduce_lr_on_plateau(optimizer, last_epoch, mode='max', factor=0.1,
                                       cooldown=cooldown, min_lr=min_lr)
 
 def cyclic_lr(optimizer, last_epoch, base_lr=0.001, max_lr=0.01,
-              step_size_up=2000, step_size_down=None, mode='triangular',
+              epochs_up=1, epochs_down=None, epoch_size=None, mode='triangular',
               gamma=1.0, scale_fn=None, scale_mode='cycle', cycle_momentum=False,
               base_momentum=0.8, max_momentum=0.9, **_) -> Any:
     def exp_range_scale_fn(x):
@@ -169,6 +170,8 @@ def cyclic_lr(optimizer, last_epoch, base_lr=0.001, max_lr=0.01,
         return res
 
     last_epoch = -1
+    step_size_up = epochs_up * epoch_size
+    step_size_down = step_size_up if epochs_down is None else epochs_down * epoch_size
     return lr_sched.CyclicLR(optimizer, base_lr=base_lr, max_lr=max_lr,
                              step_size_up=step_size_up, step_size_down=
                              step_size_down, mode=mode, scale_fn=exp_range_scale_fn,
@@ -181,8 +184,9 @@ def cosine_lr(optimizer, last_epoch, batch_size=None, epoch_size=None,
               verbose=False, min_lr=1e-7):
     last_epoch = -1
     set_lr(optimizer, start_lr)
-    return CosineLRWithRestarts(optimizer, batch_size, epoch_size, restart_period,
-             period_inc, max_period, last_epoch, verbose, min_lr)
+    return CosineLRWithRestarts(optimizer, batch_size, epoch_size * batch_size,
+                                restart_period, period_inc, max_period,
+                                last_epoch, verbose, min_lr)
 
 def get_scheduler(config, optimizer, epoch_size, last_epoch=-1):
     func = globals().get(config.scheduler.name)
@@ -195,7 +199,10 @@ def is_scheduler_continuous(scheduler) -> bool:
     return type(scheduler) in [lr_sched.ExponentialLR, lr_sched.CosineAnnealingLR,
                                lr_sched.CyclicLR, CosineLRWithRestarts]
 
-def get_warmup_scheduler(config, optimizer) -> Any:
-    return lr_sched.CyclicLR(optimizer, base_lr=0, max_lr=config.train.warmup.max_lr,
-                             step_size_up=config.train.warmup.steps, step_size_down=0,
-                             cycle_momentum=False, mode='triangular')
+def get_warmup_scheduler(config, optimizer, epoch_size) -> Any:
+    return lr_sched.CyclicLR(optimizer, base_lr=0,
+                             max_lr=config.optimizer.params.lr,
+                             step_size_up=config.train.warmup.epochs * epoch_size,
+                             step_size_down=0,
+                             cycle_momentum=False,
+                             mode='triangular')

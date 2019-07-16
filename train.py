@@ -362,7 +362,7 @@ def mixup(x: torch.Tensor, y: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]
     return x, y
 
 def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
-                epoch: int, lr_scheduler: Any, max_steps: Optional[int]) -> float:
+                epoch: int, lr_scheduler: Any) -> float:
     logger.info(f'epoch: {epoch}')
     logger.info(f'learning rate: {get_lr(optimizer)}')
 
@@ -373,9 +373,7 @@ def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
     model.train()
     optimizer.zero_grad()
 
-    num_steps = len(train_loader)
-    if max_steps:
-        num_steps = min(max_steps, num_steps)
+    num_steps = min(len(train_loader), config.train.max_steps_per_epoch)
     num_steps -= num_steps % config.train.accum_batches_num
 
     logger.info(f'total batches: {num_steps}')
@@ -519,6 +517,8 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
         model_dir = config.general.experiment_dir
 
     train_loader, val_loader, test_loader = load_data(args.fold)
+    epoch_size = min(len(train_loader), config.train.max_steps_per_epoch)
+
     logger.info(f'creating a model {config.model.arch}')
     model = create_model(config, pretrained=args.weights is None).cuda()
     criterion = get_loss(config)
@@ -535,26 +535,30 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
 
     if args.weights is None and config.train.head_only_warmup:
         logger.info('-' * 50)
-        logger.info(f'doing warmup for {config.train.warmup.steps} steps')
+        logger.info(f'doing warmup for {config.train.warmup.epochs} epochs')
         logger.info(f'max_lr will be {config.train.warmup.max_lr}')
 
         optimizer = get_optimizer(config, model.parameters())
-        warmup_scheduler = get_warmup_scheduler(config, optimizer)
-
+        warmup_scheduler = get_warmup_scheduler(config, optimizer, epoch_size)
         freeze_layers(model)
-        train_epoch(train_loader, model, criterion, optimizer, 0,
-                    warmup_scheduler, config.train.warmup.steps)
+
+        for epoch in range(config.train.warmup.epochs):
+            train_epoch(train_loader, model, criterion, optimizer, epoch,
+                        warmup_scheduler)
+
         unfreeze_layers(model)
 
     if args.weights is None and config.train.enable_warmup:
         logger.info('-' * 50)
-        logger.info(f'doing warmup for {config.train.warmup.steps} steps')
-        logger.info(f'max_lr will be {config.train.warmup.max_lr}')
+        logger.info(f'doing warmup for {config.train.warmup.epochs} epochs')
+        logger.info(f'max_lr will be {config.optimizer.params.lr}')
 
         optimizer = get_optimizer(config, model.parameters())
-        warmup_scheduler = get_warmup_scheduler(config, optimizer)
-        train_epoch(train_loader, model, criterion, optimizer, 0,
-                    warmup_scheduler, config.train.warmup.steps)
+        warmup_scheduler = get_warmup_scheduler(config, optimizer, epoch_size)
+
+        for epoch in range(config.train.warmup.epochs):
+            train_epoch(train_loader, model, criterion, optimizer, epoch,
+                        warmup_scheduler)
 
     optimizer = get_optimizer(config, model.parameters())
 
@@ -584,16 +588,6 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
         elif 'base_lr' in config.scheduler.params:
             set_lr(optimizer, config.scheduler.params.base_lr)
 
-    epoch_size = min(len(train_loader), config.train.max_steps_per_epoch) \
-                 * config.train.batch_size
-
-    #     set_lr(optimizer, float(config.cosine.start_lr))
-    #     lr_scheduler = CosineLRWithRestarts(optimizer,
-    #                                         batch_size=config.train.batch_size,
-    #                                         epoch_size=epoch_size,
-    #                                         restart_period=config.cosine.period,
-    #                                         period_inc=config.cosine.period_inc,
-    #                                         max_period=config.cosine.max_period)
     lr_scheduler = get_scheduler(config, optimizer, epoch_size=epoch_size)
 
     if args.predict_oof or args.predict_test:
@@ -637,10 +631,9 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
             restart = lr_scheduler.epoch_step()
             if restart:
                 logger.info('cosine annealing restarted, resetting the best metric')
-                best_score = min(config.cosine.min_metric_val, best_score)
+                best_score = min(config.train.restart_metric_val, best_score)
 
-        train_epoch(train_loader, model, criterion, optimizer, epoch,
-                    lr_scheduler, config.train.max_steps_per_epoch)
+        train_epoch(train_loader, model, criterion, optimizer, epoch, lr_scheduler)
         score, _ = validate(val_loader, model, epoch)
 
         if type(lr_scheduler) == ReduceLROnPlateau:

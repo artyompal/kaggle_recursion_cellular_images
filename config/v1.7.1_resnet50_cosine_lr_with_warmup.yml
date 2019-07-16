@@ -18,9 +18,9 @@ train:
     batch_size: 16
     max_steps_per_epoch: 15000
     num_epochs: 1000
-    # enable_warmup: true
-    # warmup:
-    #     epochs: 1
+    enable_warmup: true
+    warmup:
+        epochs: 1
     # mixup:
     #     enable: true
     #     beta_a: 0.3
