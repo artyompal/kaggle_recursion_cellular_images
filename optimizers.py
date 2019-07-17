@@ -25,7 +25,6 @@ def get_optimizer(config, parameters):
 def set_lr(optimizer: Any, lr: float) -> None:
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-        param_group['initial_lr'] = lr
 
 def get_lr(optimizer: Any) -> float:
     for param_group in optimizer.param_groups:
