@@ -37,6 +37,8 @@ class SiameseModel(nn.Module):
         num_inputs = self.head.output[-1].in_features
         if self.combine_method == 'concat':
             num_inputs *= 2
+        elif self.combine_method == 'mpiotte':
+            num_inputs *= 4
 
         self.fc1 = nn.Linear(num_inputs, self.fc_layer_width)
         self.batchnorm = nn.BatchNorm1d(self.fc_layer_width)
@@ -55,6 +57,9 @@ class SiameseModel(nn.Module):
             y = y1 - y2
         elif self.combine_method == 'concat':
             y = torch.cat([y1, y2], dim=1)
+        elif self.combine_method == 'mpiotte':
+            d = y1 - y2
+            y = torch.cat([y1 + y2, y1 * y2, torch.abs(d), d * d], dim=1)
         else:
             assert False
 
