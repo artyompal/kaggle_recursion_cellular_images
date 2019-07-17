@@ -18,8 +18,10 @@ import albumentations as albu
 
 from PIL import Image
 from tqdm import tqdm
+
 from debug import dprint
 from scipy.stats import describe
+from rxrx1.rxrx.io import convert_tensor_to_rgb
 
 
 class ImageDataset(torch.utils.data.Dataset): # type: ignore
@@ -105,6 +107,25 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         return image
 
     def _transform_images(self, image: np.array, index: int) -> torch.Tensor:
+        if self.debug_save:
+            print('image', index)
+            os.makedirs(f'debug_images_{self.version}/', exist_ok=True)
+
+            if self.siamese_input:
+                sirna_img = image[:, :, :6]
+                ctl_img = image[:, :, 6:]
+
+                sirna_img = convert_tensor_to_rgb(sirna_img)
+                sirna_img = sirna_img.astype(np.uint8)
+                sirna_img = Image.fromarray(sirna_img)
+
+                ctl_img = convert_tensor_to_rgb(ctl_img)
+                ctl_img = ctl_img.astype(np.uint8)
+                ctl_img = Image.fromarray(ctl_img)
+
+                sirna_img.save(f'debug_images_{self.version}/{index}_before_sirna.png')
+                ctl_img.save(f'debug_images_{self.version}/{index}_before_control.png')
+
         ''' Applies augmentations, if any. '''
         if self.augmentor is not None:
             if self.num_channels == 3:
@@ -130,13 +151,20 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         if self.debug_save:
             os.makedirs(f'debug_images_{self.version}/', exist_ok=True)
 
-            orig_img = image[:, :, :self.num_channels]
-            sirna_img = image[:, :, self.num_channels:]
+            if self.siamese_input:
+                sirna_img = image[:, :, :6]
+                ctl_img = image[:, :, 6:]
 
-            orig_img = Image.fromarray(orig_img)
-            sirna_img = Image.fromarray(sirna_img)
-            orig_img.save(f'debug_images_{self.version}/{index}_orig.png')
-            sirna_img.save(f'debug_images_{self.version}/{index}_sirna.png')
+                sirna_img = convert_tensor_to_rgb(sirna_img)
+                sirna_img = sirna_img.astype(np.uint8)
+                sirna_img = Image.fromarray(sirna_img)
+
+                ctl_img = convert_tensor_to_rgb(ctl_img)
+                ctl_img = ctl_img.astype(np.uint8)
+                ctl_img = Image.fromarray(ctl_img)
+
+                sirna_img.save(f'debug_images_{self.version}/{index}_sirna.png')
+                ctl_img.save(f'debug_images_{self.version}/{index}_control.png')
 
         return self.transforms(image)
 
