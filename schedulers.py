@@ -12,6 +12,8 @@ import torch.optim.lr_scheduler as lr_sched
 from torch.optim import Optimizer
 from optimizers import set_lr
 
+from debug import dprint
+
 
 class CosineLRWithRestarts():
     ''' Decays learning rate with cosine annealing, normalizes weight decay
@@ -57,8 +59,7 @@ class CosineLRWithRestarts():
                                    'in param_groups[{i}] when resuming an'
                                    ' optimizer')
 
-        self.base_lrs = list(map(lambda group: group['initial_lr'],
-                                 optimizer.param_groups))
+        self.base_lrs = list(map(lambda group: group['lr'], optimizer.param_groups))
 
         self.last_epoch = last_epoch
         self.batch_size = batch_size
@@ -154,6 +155,7 @@ def cyclic_lr(optimizer, last_epoch, base_lr=0.001, max_lr=0.01,
     last_epoch = -1
     step_size_up = epochs_up * epoch_size
     step_size_down = step_size_up if epochs_down is None else epochs_down * epoch_size
+    
     return lr_sched.CyclicLR(optimizer, base_lr=base_lr, max_lr=max_lr,
                              step_size_up=step_size_up, step_size_down=
                              step_size_down, mode=mode, scale_fn=exp_range_scale_fn,
@@ -164,8 +166,6 @@ def cyclic_lr(optimizer, last_epoch, base_lr=0.001, max_lr=0.01,
 def cosine_lr(optimizer, last_epoch, batch_size=None, epoch_size=None,
               start_lr=1e-4, restart_period=100, period_inc=2, max_period=100,
               verbose=False, min_lr=1e-7):
-    last_epoch = -1
-    set_lr(optimizer, start_lr)
     return CosineLRWithRestarts(optimizer, batch_size, epoch_size * batch_size,
                                 restart_period, period_inc, max_period,
                                 last_epoch, verbose, min_lr)
