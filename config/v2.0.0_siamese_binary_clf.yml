@@ -1,0 +1,54 @@
+
+general:
+    num_folds: 3
+    validation_policy: 'split_by_exp'
+
+model:
+    name: 'SiameseBinaryClassifier'
+    add_controls_to_train: true
+    arch: 'resnet34'
+    image_size: 512
+    input_size: 480
+    num_channels: 6
+    dropout: 0.5
+    # fc_layer_width: 500
+    num_sites: 2
+    hard_mining_by_exp: false
+
+train:
+    path: 'data/train'
+    batch_size: 16
+    max_steps_per_epoch: 15000
+    num_epochs: 1000
+    enable_warmup: true
+    warmup:
+        epochs: 2
+    # mixup:
+    #     enable: true
+    #     beta_a: 0.3
+
+test:
+    batch_size: 16
+    # num_ttas: 2
+
+optimizer:
+    name: 'adam'
+    params:
+        lr: 1e-4
+
+scheduler:
+    name: 'cyclic_lr'
+    params:
+        max_lr: 1e-4
+        base_lr: 1e-5
+        epochs_up: 2
+
+loss:
+    name: 'cross_entropy'
+
+augmentations:
+    affine: 'none'
+    global_prob: 1.0
+    hflip: 1
+    rotate: 1
+    vflip: 1

@@ -147,6 +147,9 @@ def load_data(fold: int) -> Any:
     print('train_controls', train_controls.shape)
     print('test_controls', test_controls.shape)
 
+    if config.model.add_controls_to_train:
+        train_df = pd.concat([train_df, train_controls, test_controls])
+
     augs: List[Union[albu.BasicTransform, albu.OneOf]] = []
 
     if config.augmentations.hflip:

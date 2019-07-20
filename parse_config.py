@@ -29,7 +29,8 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.general.validation_policy = 'strat_by_target'
 
     cfg.model = edict()
-    cfg.model.type = 'SiameseModel'
+    cfg.model.name = 'SiameseModel'
+    cfg.model.add_controls_to_train = False
     cfg.model.arch = 'resnet50'
     cfg.model.image_size = 0
     cfg.model.input_size = 0
@@ -37,7 +38,9 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.model.bottleneck_fc = None
     cfg.model.dropout = 0
     cfg.model.num_channels = 3
+    cfg.model.fc_layer_width = 0
     cfg.model.num_sites = 1
+    cfg.model.hard_mining_by_exp = False
 
     cfg.train = edict()
     cfg.train.csv = 'train.csv'

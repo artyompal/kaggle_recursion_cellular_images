@@ -23,7 +23,7 @@ class ClassifierModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor: # type: ignore
         return self.model(x)
 
-class SiameseModel(nn.Module):
+class SiameseWithNegControls(nn.Module):
     ''' Model with two inputs. '''
     def __init__(self, config: Any, pretrained: bool) -> None:
         super().__init__()
@@ -84,6 +84,75 @@ class SiameseModel(nn.Module):
 
         if self.dropout is not None:
             y = self.dropout(y)
+
+        y = self.fc2(y)
+        return y
+
+class SiameseBinaryClassifier(nn.Module):
+    ''' A binary classifier. Takes two inputs, returns boolean result:
+    same class / not same class. '''
+    def __init__(self, config: Any, pretrained: bool) -> None:
+        super().__init__()
+
+        self.num_channels = config.model.num_channels
+        self.fc_layer_width = config.model.fc_layer_width
+        self.combine_method = config.model.combine_method
+
+        self.head = create_classifier_model(config, pretrained)
+
+        num_inputs = self.head.output[-1].in_features
+        if self.combine_method == 'concat':
+            num_inputs *= 2
+        elif self.combine_method == 'mpiotte':
+            num_inputs *= 4
+        elif self.combine_method == 'mpiotte_orig':
+            self.conv1d_channels = config.model.conv1d_channels
+            self.conv1 = nn.Conv1d(4, self.conv1d_channels, 1)
+            self.conv2 = nn.Conv1d(self.conv1d_channels, 1, 1)
+
+        if self.fc_layer_width:
+            self.fc1 = nn.Linear(num_inputs, self.fc_layer_width)
+            self.batchnorm = nn.BatchNorm1d(self.fc_layer_width)
+            self.relu = nn.ReLU()
+            self.dropout = nn.Dropout(config.model.dropout) if config.model.dropout else None
+
+        self.fc2 = nn.Linear(config.model.fc_layer_width, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor: # type: ignore
+        y1 = self.head.features(x[:, :self.num_channels])
+        y2 = self.head.features(x[:, self.num_channels:])
+
+        y1 = y1.view(y1.size(0), -1)
+        y2 = y2.view(y2.size(0), -1)
+
+        if self.combine_method == 'subtract':
+            y = y1 - y2
+        elif self.combine_method == 'concat':
+            y = torch.cat([y1, y2], dim=1)
+        elif self.combine_method == 'mpiotte':
+            d = y1 - y2
+            y = torch.cat([y1 + y2, y1 * y2, torch.abs(d), d * d], dim=1)
+        elif self.combine_method == 'mpiotte_orig':
+            y1 = y1.view(y1.size(0), 1, -1)
+            y2 = y2.view(y2.size(0), 1, -1)
+
+            d = y1 - y2
+            y = torch.cat([y1 + y2, y1 * y2, torch.abs(d), d * d], dim=1)
+            y = self.conv1(y)
+            y = self.relu(y)
+            y = self.conv2(y)
+
+            y = y.view(y.size(0), -1)
+        else:
+            assert False
+
+        if self.fc_layer_width:
+            y = self.fc1(y)
+            y = self.batchnorm(y)
+            y = self.relu(y)
+
+            if self.dropout is not None:
+                y = self.dropout(y)
 
         y = self.fc2(y)
         return y
@@ -153,7 +222,7 @@ def create_classifier_model(config: Any, pretrained: bool) -> Any:
     return model
 
 def create_model(config: Any, pretrained: bool) -> Any:
-    return globals()[config.model.type](config, pretrained)
+    return globals()[config.model.name](config, pretrained)
 
 def freeze_layers(model: Any) -> None:
     ''' Freezes all layers but the last FC layer. '''

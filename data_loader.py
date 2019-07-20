@@ -43,21 +43,25 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         self.debug_save = debug_save
         self.use_one_hot = config.loss.name != 'cross_entropy'
         self.num_sites = config.model.num_sites
-        self.siamese_input = config.model.type == 'SiameseModel'
+        self.siamese_network = 'Siamese' in config.model.name
+        self.add_neg_controls = config.model.name.startswith('SiameseWithNegControls')
+        self.generate_pairs = 'BinaryClassifier' in config.model.name
+        self.hard_mining_by_exp = config.model.hard_mining_by_exp
 
 
-        # load negative control information
-        self.neg_control: Dict[str, str] = {}
-        controls_df = controls_df.loc[controls_df.well_type == 'negative_control']
+        if self.add_neg_controls:
+            # load negative control information
+            self.neg_control: Dict[str, str] = {}
+            controls_df = controls_df.loc[controls_df.well_type == 'negative_control']
 
-        for row in controls_df.itertuples():
-            exp_plate = f'{row.experiment}_{row.plate}'
-            self.neg_control[exp_plate] = row.well
+            for row in controls_df.itertuples():
+                exp_plate = f'{row.experiment}_{row.plate}'
+                self.neg_control[exp_plate] = row.well
 
-        # check if there's negative control for every sample
-        for row in self.df.itertuples():
-            exp_plate = f'{row.experiment}_{row.plate}'
-            assert self.neg_control[exp_plate] != ''
+            # check if there's negative control for every sample
+            for row in self.df.itertuples():
+                exp_plate = f'{row.experiment}_{row.plate}'
+                assert self.neg_control[exp_plate] != ''
 
 
         # if we use augmentations, create group transform
@@ -68,7 +72,7 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
             self.augmentor = albu.Compose(augmentor, p=1,
                                           additional_targets=targets)
 
-        rep = 2 if config.model.type == 'SiameseModel' else 1
+        rep = 2 if 'Siamese' in config.model.name else 1
         self.transforms = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.02645905, 0.05782904, 0.0412261,
@@ -77,8 +81,12 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
                                        0.03875584, 0.02616441, 0.03077043] * rep)
         ])
 
-    def _load_image(self, path: str) -> np.array:
+    def _load_image(self, filename: str) -> np.array:
         ''' Loads image into np.array with optional resize. '''
+        path = os.path.join(self.path, filename)
+        if not os.path.exists:
+            path = os.path.join('data/test', filename)
+
         image = Image.open(path)
 
         if self.image_size != 0:
@@ -94,14 +102,14 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
 
         for channel in range(self.num_channels):
             filename = f'{exp}/Plate{plate}/{well}_s{site+1}_w{channel+1}.png'
-            layers.append(self._load_image(os.path.join(self.path, filename)))
+            layers.append(self._load_image(filename))
 
-        if self.siamese_input:
+        if self.add_neg_controls:
             neg_ctl_well = self.neg_control[f'{exp}_{plate}']
 
             for channel in range(self.num_channels):
                 filename = f'{exp}/Plate{plate}/{neg_ctl_well}_s{site+1}_w{channel+1}.png'
-                layers.append(self._load_image(os.path.join(self.path, filename)))
+                layers.append(self._load_image(filename))
 
         image = np.dstack(layers)
         return image
@@ -111,7 +119,7 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
             print('image', index)
             os.makedirs(f'debug_images_{self.version}/', exist_ok=True)
 
-            if self.siamese_input:
+            if self.siamese_network:
                 sirna_img = image[:, :, :6]
                 ctl_img = image[:, :, 6:]
 
@@ -131,7 +139,7 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
             if self.num_channels == 3:
                 image = self.augmentor(image=image)['image']
             elif self.num_channels == 6:
-                if not self.siamese_input:
+                if not self.siamese_network:
                     image0, image1 = image[:, :, :3], image[:, :, 3:]
                     results = self.augmentor(image=image0, image1=image1)
                     image0, image1 = results['image'], results['image1']
@@ -151,7 +159,7 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         if self.debug_save:
             os.makedirs(f'debug_images_{self.version}/', exist_ok=True)
 
-            if self.siamese_input:
+            if self.siamese_network:
                 sirna_img = image[:, :, :6]
                 ctl_img = image[:, :, 6:]
 
@@ -168,8 +176,7 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
 
         return self.transforms(image)
 
-    def __getitem__(self, index: int) -> Any:
-        ''' Returns: tuple (sample, target) '''
+    def _load_sample(self, index: int) -> Any:
         image = self._load_images(index)
 
         if self.num_ttas == 1:
@@ -194,6 +201,34 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
             return image, target
         else:
             return image
+
+    def __getitem__(self, index: int) -> Any:
+        ''' Returns: tuple (sample, target) '''
+        positive = index % 2
+        image, _ = self._load_sample(index)
+
+        df_index = index % self.df.shape[0]
+        exp = self.df.experiment.values[df_index]
+        sirna = self.df.sirna.values[df_index]
+
+        if positive:
+            if self.hard_mining_by_exp:
+                mask = (self.df.sirna == sirna) & (self.df.experiment != exp)
+            else:
+                mask = self.df.sirna == sirna
+        else:
+            if self.hard_mining_by_exp:
+                mask = (self.df.sirna != sirna) & (self.df.experiment == exp)
+            else:
+                mask = self.df.sirna != sirna
+
+        another = random.choice(self.df.loc[mask].index)
+        random_site_ofs = self.df.shape[0] * random.randrange(2)
+
+        image2, _ = self._load_sample(another + random_site_ofs)
+        image = torch.cat([image, image2], dim=1)
+
+        return image, positive
 
     def __len__(self) -> int:
         ''' We have two sets of images per well. '''
