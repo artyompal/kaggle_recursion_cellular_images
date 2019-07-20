@@ -32,9 +32,9 @@ class SiameseWithNegControls(nn.Module):
         self.fc_layer_width = config.model.fc_layer_width
         self.combine_method = config.model.combine_method
 
-        self.head = create_classifier_model(config, pretrained)
+        self.classifier = create_classifier_model(config, pretrained)
 
-        num_inputs = self.head.output[-1].in_features
+        num_inputs = self.classifier.output[-1].in_features
         if self.combine_method == 'concat':
             num_inputs *= 2
         elif self.combine_method == 'mpiotte':
@@ -98,9 +98,9 @@ class SiameseBinaryClassifier(nn.Module):
         self.fc_layer_width = config.model.fc_layer_width
         self.combine_method = config.model.combine_method
 
-        self.head = create_classifier_model(config, pretrained)
+        self.clf_model = create_classifier_model(config, pretrained)
 
-        num_inputs = self.head.output[-1].in_features
+        num_inputs = self.clf_model.output[-1].in_features
         if self.combine_method == 'concat':
             num_inputs *= 2
         elif self.combine_method == 'mpiotte':
@@ -115,15 +115,18 @@ class SiameseBinaryClassifier(nn.Module):
             self.batchnorm = nn.BatchNorm1d(self.fc_layer_width)
             self.relu = nn.ReLU()
             self.dropout = nn.Dropout(config.model.dropout) if config.model.dropout else None
+            self.fc2 = nn.Linear(config.model.fc_layer_width, 1)
+        else:
+            self.fc2 = nn.Linear(num_inputs, 1)
 
-        self.fc2 = nn.Linear(config.model.fc_layer_width, 1)
+    def branch(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.clf_model.features(x)
+        y = y.view(y.size(0), -1)
+        return y
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor: # type: ignore
-        y1 = self.head.features(x[:, :self.num_channels])
-        y2 = self.head.features(x[:, self.num_channels:])
-
-        y1 = y1.view(y1.size(0), -1)
-        y2 = y2.view(y2.size(0), -1)
+    def head(self, y: torch.Tensor) -> torch.Tensor:
+        y1 = y[:, :self.num_channels]
+        y2 = y[:, self.num_channels:]
 
         if self.combine_method == 'subtract':
             y = y1 - y2
@@ -155,6 +158,15 @@ class SiameseBinaryClassifier(nn.Module):
                 y = self.dropout(y)
 
         y = self.fc2(y)
+        y = y.view(y.size(0))
+        return y
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor: # type: ignore
+        y1 = self.branch(x[:, :self.num_channels])
+        y2 = self.branch(x[:, self.num_channels:])
+
+        y = torch.cat([y1, y2], dim=1)
+        y = self.head(y)
         return y
 
 def create_classifier_model(config: Any, pretrained: bool) -> Any:

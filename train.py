@@ -31,7 +31,7 @@ from easydict import EasyDict as edict
 
 import albumentations as albu
 
-from data_loader import ImageDataset
+from data_loader import ImageDataset, AllVsAllDataset
 from utils import create_logger, AverageMeter
 from debug import dprint
 
@@ -148,7 +148,8 @@ def load_data(fold: int) -> Any:
     print('test_controls', test_controls.shape)
 
     if config.model.add_controls_to_train:
-        train_df = pd.concat([train_df, train_controls, test_controls])
+        train_df = pd.concat([train_df, train_controls, test_controls], sort=False)
+        print('train_df total', train_df.shape)
 
     augs: List[Union[albu.BasicTransform, albu.OneOf]] = []
 
@@ -239,9 +240,16 @@ def load_data(fold: int) -> Any:
                                  debug_save=args.save_images)
 
     num_ttas_for_val = config.test.num_ttas if args.predict_oof else 1
-    val_dataset = ImageDataset(val_df, train_controls,
-                               mode='val', config=config,
-                               num_ttas=num_ttas_for_val, augmentor=transform_test)
+
+    train_feature_dataset = ImageDataset(train_df, train_controls,
+                                         mode='val', config=config,
+                                         num_ttas=num_ttas_for_val,
+                                         augmentor=transform_test)
+
+    val_feature_dataset = ImageDataset(val_df, train_controls,
+                                       mode='val', config=config,
+                                       num_ttas=num_ttas_for_val,
+                                       augmentor=transform_test)
 
     test_dataset = ImageDataset(test_df, test_controls,
                                 mode='test', config=config,
@@ -252,15 +260,19 @@ def load_data(fold: int) -> Any:
         train_dataset, batch_size=config.train.batch_size, shuffle=True,
         num_workers=config.general.num_workers, drop_last=True)
 
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=config.train.batch_size, shuffle=False,
+    train_feature_loader = torch.utils.data.DataLoader(
+        train_feature_dataset, batch_size=config.test.batch_size, shuffle=False,
+        num_workers=config.general.num_workers)
+
+    val_feature_loader = torch.utils.data.DataLoader(
+        val_feature_dataset, batch_size=config.test.batch_size, shuffle=False,
         num_workers=config.general.num_workers)
 
     test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=config.test.batch_size, shuffle=False,
         num_workers=config.general.num_workers)
 
-    return train_loader, val_loader, test_loader
+    return train_loader, train_feature_loader, val_feature_loader, test_loader
 
 def lr_finder(train_loader: Any, model: Any, criterion: Any, optimizer: Any) -> None:
     ''' Finds the optimal LR range and sets up first optimizer parameters. '''
@@ -394,7 +406,7 @@ def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
             input_, target = mixup(input_, target)
 
         output = model(input_)
-        loss = criterion(output, target.cuda())
+        loss = criterion(output, target.float().cuda())
 
         predict = output.detach()
         avg_score.update(accuracy(predict, target))
@@ -424,17 +436,17 @@ def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
     logger.info(f' * average acc on train {avg_score.avg:.4f}')
     return avg_score.avg
 
-def inference(data_loader: Any, model: Any) -> Tuple[np.array, Optional[np.array]]:
-    ''' Returns predictions and targets, if any. '''
+def inference(data_loader: Any, model: Any, func: Any, activation: Any = None) -> np.array:
+    ''' Returns predictions array. '''
     model.eval()
     predicts_list, targets_list = [], []
 
-    if config.loss.name == 'binary_cross_entropy':
-        activation: nn.Module = nn.Sigmoid()
-    elif config.loss.name == 'cross_entropy':
-        activation = nn.Softmax(dim=1)
-    else:
-        assert None
+    # if config.loss.name == 'binary_cross_entropy':
+    #     activation: nn.Module = nn.Sigmoid()
+    # elif config.loss.name == 'cross_entropy':
+    #     activation = nn.Softmax(dim=1)
+    # else:
+    #     assert None
 
     with torch.no_grad():
         for input_data in tqdm(data_loader, disable=IN_KERNEL):
@@ -447,8 +459,7 @@ def inference(data_loader: Any, model: Any) -> Tuple[np.array, Optional[np.array
                 bs, ncrops, c, h, w = input_.size()
                 input_ = input_.view(-1, c, h, w)
 
-                output = model(input_)
-                output = activation(output)
+                output = model.__dict__[func](input_)
 
                 if config.test.tta_combine_func == 'max':
                     output = output.view(bs, ncrops, -1).max(1)[0]
@@ -458,6 +469,8 @@ def inference(data_loader: Any, model: Any) -> Tuple[np.array, Optional[np.array
                     assert False
             else:
                 output = model(input_.cuda())
+
+            if activation is not None:
                 output = activation(output)
 
             predicts_list.append(output.detach().cpu().numpy())
@@ -465,28 +478,33 @@ def inference(data_loader: Any, model: Any) -> Tuple[np.array, Optional[np.array
                 targets_list.append(target)
 
     predicts = np.concatenate(predicts_list)
-    targets = np.concatenate(targets_list) if targets_list else None
+    return predicts
+
+def siamese_inference(train_feature_loader: Any, test_feature_loader: Any,
+                      model: Any) -> np.array:
+    ''' Returns predictions array. '''
+    train_features = inference(train_feature_loader, model, 'features')
+    test_features = inference(test_feature_loader, model, 'features')
+
+    data_loader = AllVsAllDataset(train_features, test_features, config)
+    predicts = inference(test_feature_loader, model, 'features', nn.Sigmoid())
 
     if config.model.num_sites == 2:
-        sz = predicts.shape[0] // 2
+        sz = predicts.shape[0]
+        predicts = np.mean(np.dstack([predicts[:sz], predicts[sz:]]), axis=-1)
 
-        if config.test.tta_combine_func == 'max':
-            predicts = np.amax(np.dstack([predicts[:sz], predicts[sz:]]), axis=2)
-        elif config.test.tta_combine_func == 'mean':
-            predicts = np.mean(np.dstack([predicts[:sz], predicts[sz:]]), axis=2)
-        else:
-            assert False
+    predicts = np.argmax(predicts, axis=1)
+    return predicts
 
-        if targets is not None:
-            targets = targets[:sz]
-
-    return predicts, targets
-
-def validate(val_loader: Any, model: Any, epoch: int) -> Tuple[float, np.ndarray]:
+def validate(train_feature_loader: Any, val_feature_loader: Any, model: Any,
+             epoch: int) -> Tuple[float, np.ndarray]:
     ''' Infers predictions and calculates validation score. '''
     logger.info('validate()')
-    predicts, targets = inference(val_loader, model)
-    predicts, targets = torch.tensor(predicts), torch.tensor(targets)
+    predicts = siamese_inference(train_feature_loader,
+                                          val_feature_loader, model)
+
+    targets = val_feature_loader.dataset.df.sirna.values
+    predicts = torch.tensor(predicts), torch.tensor(targets)
     score = accuracy(predicts, targets)
 
     logger.info(f' * epoch {epoch} acc on validation {score:.4f}')
@@ -494,12 +512,12 @@ def validate(val_loader: Any, model: Any, epoch: int) -> Tuple[float, np.ndarray
 
 def gen_train_prediction(data_loader: Any, model: Any, epoch: int,
                          model_path: str) -> np.ndarray:
-    predicts, _ = inference(data_loader, model)
+    predicts, _ = siamese_inference(data_loader, model)
     filename = os.path.splitext(os.path.basename(model_path))[0]
     np.save(f'level1_train_{filename}.npy', predicts)
 
 def gen_test_prediction(data_loader: Any, model: Any, model_path: str) -> np.ndarray:
-    predicts, _ = inference(data_loader, model)
+    predicts, _ = siamese_inference(data_loader, model)
     filename = f'level1_test_{os.path.splitext(os.path.basename(model_path))[0]}'
     np.save(filename, predicts)
 
@@ -520,7 +538,7 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
     else:
         model_dir = config.general.experiment_dir
 
-    train_loader, val_loader, test_loader = load_data(args.fold)
+    train_loader, train_feature_loader, val_feature_loader, test_loader = load_data(args.fold)
     epoch_size = min(len(train_loader), config.train.max_steps_per_epoch)
 
     logger.info(f'creating a model {config.model.arch}')
@@ -638,7 +656,7 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
                 best_score = min(config.train.restart_metric_val, best_score)
 
         train_epoch(train_loader, model, criterion, optimizer, epoch, lr_scheduler)
-        score, _ = validate(val_loader, model, epoch)
+        score, _ = validate(train_feature_loader, val_feature_loader, model, epoch)
 
         if type(lr_scheduler) == ReduceLROnPlateau:
             lr_scheduler.step(metrics=score)
