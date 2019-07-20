@@ -241,7 +241,9 @@ def load_data(fold: int) -> Any:
 
     num_ttas_for_val = config.test.num_ttas if args.predict_oof else 1
 
-    train_feature_dataset = ImageDataset(train_df, train_controls,
+    train_subset = train_df.groupby('sirna').head(3)
+
+    train_feature_dataset = ImageDataset(train_subset, train_controls,
                                          mode='val', config=config,
                                          num_ttas=num_ttas_for_val,
                                          augmentor=transform_test)
@@ -449,17 +451,11 @@ def inference(data_loader: Any, model: Any, func: Any, activation: Any = None) -
     #     assert None
 
     with torch.no_grad():
-        for input_data in tqdm(data_loader, disable=IN_KERNEL):
-            if data_loader.dataset.mode != 'test':
-                input_, target = input_data
-            else:
-                input_, target = input_data, None
-
+        for input_ in tqdm(data_loader, disable=IN_KERNEL):
             if data_loader.dataset.num_ttas != 1:
                 bs, ncrops, c, h, w = input_.size()
                 input_ = input_.view(-1, c, h, w)
-
-                output = model.__dict__[func](input_)
+                output = getattr(model, func)(input_.cuda())
 
                 if config.test.tta_combine_func == 'max':
                     output = output.view(bs, ncrops, -1).max(1)[0]
@@ -468,14 +464,12 @@ def inference(data_loader: Any, model: Any, func: Any, activation: Any = None) -
                 else:
                     assert False
             else:
-                output = model(input_.cuda())
+                output = getattr(model, func)(input_.cuda())
 
             if activation is not None:
                 output = activation(output)
 
             predicts_list.append(output.detach().cpu().numpy())
-            if target is not None:
-                targets_list.append(target)
 
     predicts = np.concatenate(predicts_list)
     return predicts
@@ -487,7 +481,7 @@ def siamese_inference(train_feature_loader: Any, test_feature_loader: Any,
     test_features = inference(test_feature_loader, model, 'features')
 
     data_loader = AllVsAllDataset(train_features, test_features, config)
-    predicts = inference(test_feature_loader, model, 'features', nn.Sigmoid())
+    predicts = inference(test_feature_loader, model, 'classifier', nn.Sigmoid())
 
     if config.model.num_sites == 2:
         sz = predicts.shape[0]
@@ -655,7 +649,7 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
                 logger.info('cosine annealing restarted, resetting the best metric')
                 best_score = min(config.train.restart_metric_val, best_score)
 
-        train_epoch(train_loader, model, criterion, optimizer, epoch, lr_scheduler)
+        # train_epoch(train_loader, model, criterion, optimizer, epoch, lr_scheduler)
         score, _ = validate(train_feature_loader, val_feature_loader, model, epoch)
 
         if type(lr_scheduler) == ReduceLROnPlateau:

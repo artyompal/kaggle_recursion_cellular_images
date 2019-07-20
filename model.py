@@ -119,12 +119,12 @@ class SiameseBinaryClassifier(nn.Module):
         else:
             self.fc2 = nn.Linear(num_inputs, 1)
 
-    def branch(self, x: torch.Tensor) -> torch.Tensor:
+    def features(self, x: torch.Tensor) -> torch.Tensor:
         y = self.clf_model.features(x)
         y = y.view(y.size(0), -1)
         return y
 
-    def head(self, y: torch.Tensor) -> torch.Tensor:
+    def classifier(self, y: torch.Tensor) -> torch.Tensor:
         y1 = y[:, :self.num_channels]
         y2 = y[:, self.num_channels:]
 
