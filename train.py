@@ -311,7 +311,7 @@ def lr_finder(train_loader: Any, model: Any, criterion: Any, optimizer: Any) -> 
         loss = criterion(output, target.cuda())
         loss_val = loss.data.item()
 
-        predict = (output.detach() > 0.1).type(torch.FloatTensor)
+        predict = output.detach() > 0.5
         score = accuracy(predict, target)
 
         optimizer.zero_grad()
@@ -413,7 +413,7 @@ def train_epoch(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
         output = model(input_)
         loss = criterion(output, target.float().cuda())
 
-        predict = output.detach()
+        predict = output.detach() > 0.5
         avg_score.update(accuracy(predict, target))
 
         losses.update(loss.data.item(), input_.size(0))
