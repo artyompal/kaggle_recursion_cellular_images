@@ -46,7 +46,6 @@ def GAP(predicts: torch.Tensor, confs: torch.Tensor, targets: torch.Tensor) -> f
         assert False
 
     assert predicts.shape == confs.shape and confs.shape == targets.shape
-
     sorted_confs, indices = torch.sort(confs, descending=True)
 
     confs = confs.cpu().numpy()
@@ -68,7 +67,7 @@ def accuracy(predicts: Any, targets: Any) -> float:
     if isinstance(predicts, torch.Tensor):
         predicts = predicts.cpu().numpy()
 
-    if isinstance(predicts, torch.Tensor):
+    if isinstance(targets, torch.Tensor):
         targets = targets.cpu().numpy()
 
     if len(predicts.shape) == 2:
@@ -81,5 +80,5 @@ def accuracy(predicts: Any, targets: Any) -> float:
         dprint(predicts.shape)
         dprint(targets.shape)
         assert False
-        
+
     return np.mean(predicts == targets)

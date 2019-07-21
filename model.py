@@ -163,11 +163,11 @@ class SiameseBinaryClassifier(nn.Module):
         return y
 
     def forward(self, x: torch.Tensor) -> torch.Tensor: # type: ignore
-        y1 = self.branch(x[:, :self.num_channels])
-        y2 = self.branch(x[:, self.num_channels:])
+        y1 = self.features(x[:, :self.num_channels])
+        y2 = self.features(x[:, self.num_channels:])
 
         y = torch.cat([y1, y2], dim=1)
-        y = self.head(y)
+        y = self.classifier(y)
         return y
 
 def create_classifier_model(config: Any, pretrained: bool) -> Any:
