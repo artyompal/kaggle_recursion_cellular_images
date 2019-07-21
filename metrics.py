@@ -3,6 +3,7 @@
 import numpy as np
 import torch
 
+from typing import Any
 from debug import dprint
 
 def F_score(predict: torch.Tensor, labels: torch.Tensor, beta: int,
@@ -63,9 +64,12 @@ def GAP(predicts: torch.Tensor, confs: torch.Tensor, targets: torch.Tensor) -> f
     res /= targets.shape[0]
     return res
 
-def accuracy(predicts: torch.Tensor, targets: torch.Tensor) -> float:
-    predicts = predicts.cpu().numpy()
-    targets = targets.cpu().numpy()
+def accuracy(predicts: Any, targets: Any) -> float:
+    if isinstance(predicts, torch.Tensor):
+        predicts = predicts.cpu().numpy()
+
+    if isinstance(predicts, torch.Tensor):
+        targets = targets.cpu().numpy()
 
     if len(predicts.shape) == 2:
         predicts = np.argmax(predicts, axis=1)
@@ -73,5 +77,9 @@ def accuracy(predicts: torch.Tensor, targets: torch.Tensor) -> float:
     if len(targets.shape) == 2:
         targets = np.argmax(targets, axis=1)
 
-    assert predicts.shape == targets.shape
+    if predicts.shape != targets.shape:
+        dprint(predicts.shape)
+        dprint(targets.shape)
+        assert False
+        
     return np.mean(predicts == targets)

@@ -241,14 +241,14 @@ def load_data(fold: int) -> Any:
 
     num_ttas_for_val = config.test.num_ttas if args.predict_oof else 1
 
-    train_subset = train_df.groupby('sirna').head(3)
-
+    train_subset = train_df.groupby('sirna').head(1)
     train_feature_dataset = ImageDataset(train_subset, train_controls,
                                          mode='val', config=config,
                                          num_ttas=num_ttas_for_val,
                                          augmentor=transform_test)
 
-    val_feature_dataset = ImageDataset(val_df, train_controls,
+    val_subset = val_df.groupby('sirna').head(1)
+    val_feature_dataset = ImageDataset(val_subset, train_controls,
                                        mode='val', config=config,
                                        num_ttas=num_ttas_for_val,
                                        augmentor=transform_test)
@@ -480,29 +480,38 @@ def siamese_inference(train_feature_loader: Any, test_feature_loader: Any,
     train_features = inference(train_feature_loader, model, 'features')
     test_features = inference(test_feature_loader, model, 'features')
 
-    data_loader = AllVsAllDataset(train_features, test_features, config)
-    predicts = inference(test_feature_loader, model, 'classifier', nn.Sigmoid())
+    dataset = AllVsAllDataset(torch.tensor(train_features),
+                              torch.tensor(test_features), config)
 
-    if config.model.num_sites == 2:
-        sz = predicts.shape[0]
-        predicts = np.mean(np.dstack([predicts[:sz], predicts[sz:]]), axis=-1)
+    data_loader = torch.utils.data.DataLoader(
+        dataset, batch_size=config.test.batch_size, shuffle=False,
+        num_workers=config.general.num_workers)
+    predicts = inference(data_loader, model, 'classifier', nn.Sigmoid())
 
+    # TODO: use both sites for every test sample
+    # if config.model.num_sites == 2:
+    #     sz = predicts.shape[0]
+    #     predicts = np.mean(np.dstack([predicts[:sz], predicts[sz:]]), axis=-1)
+
+    predicts = predicts.reshape(len(test_feature_loader.dataset),
+                                len(train_feature_loader.dataset))
     predicts = np.argmax(predicts, axis=1)
+
+    # FIXME: convert train sample indices to sirna indices here!!!
+
     return predicts
 
 def validate(train_feature_loader: Any, val_feature_loader: Any, model: Any,
-             epoch: int) -> Tuple[float, np.ndarray]:
+             epoch: int) -> float:
     ''' Infers predictions and calculates validation score. '''
     logger.info('validate()')
-    predicts = siamese_inference(train_feature_loader,
-                                          val_feature_loader, model)
+    predicts = siamese_inference(train_feature_loader, val_feature_loader, model)
 
     targets = val_feature_loader.dataset.df.sirna.values
-    predicts = torch.tensor(predicts), torch.tensor(targets)
     score = accuracy(predicts, targets)
 
     logger.info(f' * epoch {epoch} acc on validation {score:.4f}')
-    return score, predicts.numpy()
+    return score
 
 def gen_train_prediction(data_loader: Any, model: Any, epoch: int,
                          model_path: str) -> np.ndarray:
@@ -649,8 +658,8 @@ def run(hyperparams: Optional[Dict[str, str]] = None) -> float:
                 logger.info('cosine annealing restarted, resetting the best metric')
                 best_score = min(config.train.restart_metric_val, best_score)
 
-        # train_epoch(train_loader, model, criterion, optimizer, epoch, lr_scheduler)
-        score, _ = validate(train_feature_loader, val_feature_loader, model, epoch)
+        train_epoch(train_loader, model, criterion, optimizer, epoch, lr_scheduler)
+        score = validate(train_feature_loader, val_feature_loader, model, epoch)
 
         if type(lr_scheduler) == ReduceLROnPlateau:
             lr_scheduler.step(metrics=score)

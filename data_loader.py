@@ -247,6 +247,7 @@ class AllVsAllDataset(torch.utils.data.Dataset): # type: ignore
 
         self.train = train_features
         self.test = test_features
+        self.num_ttas = config.test.num_ttas
 
     def __getitem__(self, index: int) -> torch.Tensor:
         ''' Returns: two numpy arrays stacked by axis=1. '''
