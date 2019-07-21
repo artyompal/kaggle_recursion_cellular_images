@@ -236,6 +236,7 @@ def load_data(fold: int) -> Any:
 
     train_dataset = ImageDataset(train_df, train_controls,
                                  mode='train', config=config,
+                                 num_sites=config.model.num_sites,
                                  augmentor=transform_train,
                                  debug_save=args.save_images)
 

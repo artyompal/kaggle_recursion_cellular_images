@@ -26,7 +26,7 @@ from rxrx1.rxrx.io import convert_tensor_to_rgb
 
 class ImageDataset(torch.utils.data.Dataset): # type: ignore
     def __init__(self, dataframe: pd.DataFrame, controls_df: pd.DataFrame,
-                 mode: str, config: Any, num_ttas: int = 1,
+                 mode: str, config: Any, num_ttas: int = 1, num_sites: int = 1,
                  augmentor: Any = None, debug_save: bool = False) -> None:
         print(f'creating data_loader for {config.version} in mode={mode}')
         assert mode in ['train', 'val', 'test']
@@ -42,7 +42,7 @@ class ImageDataset(torch.utils.data.Dataset): # type: ignore
         self.num_channels = config.model.num_channels
         self.debug_save = debug_save
         self.use_one_hot = False
-        self.num_sites = config.model.num_sites
+        self.num_sites = num_sites
         self.siamese_network = 'Siamese' in config.model.name
         self.add_neg_controls = config.model.name.startswith('SiameseWithNegControls')
         self.generate_pairs = 'BinaryClassifier' in config.model.name

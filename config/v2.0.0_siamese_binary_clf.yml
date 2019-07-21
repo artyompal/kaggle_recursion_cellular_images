@@ -13,7 +13,7 @@ model:
     num_channels: 6
     dropout: 0.5
     # fc_layer_width: 500
-    num_sites: 1 # 2
+    num_sites: 2
     num_classes: 2
     hard_mining_by_exp: false
 
