@@ -32,6 +32,8 @@ train:
 test:
     batch_size: 16
     # num_ttas: 2
+    num_train_samples_per_class: 3
+    num_val_samples_per_class: 2
 
 optimizer:
     name: 'adam'

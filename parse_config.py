@@ -27,6 +27,7 @@ def _get_default_config(filename: str, fold: int) -> edict:
     cfg.general.num_workers = min(12, multiprocessing.cpu_count())
     cfg.general.num_folds = 5
     cfg.general.validation_policy = 'strat_by_target'
+    cfg.general.num_supported_sirna = 1108
 
     cfg.model = edict()
     cfg.model.name = 'SiameseModel'

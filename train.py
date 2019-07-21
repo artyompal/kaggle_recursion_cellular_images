@@ -241,13 +241,16 @@ def load_data(fold: int) -> Any:
 
     num_ttas_for_val = config.test.num_ttas if args.predict_oof else 1
 
-    train_subset = train_df.groupby('sirna').head(1)
+    train_subset = train_df.loc[train_df.sirna < config.general.num_supported_sirna]
+    train_subset = train_subset.groupby('sirna').apply(
+        lambda row: row.sample(config.test.num_train_samples_per_class))
     train_feature_dataset = ImageDataset(train_subset, train_controls,
                                          mode='val', config=config,
                                          num_ttas=num_ttas_for_val,
                                          augmentor=transform_test)
 
-    val_subset = val_df.groupby('sirna').head(1)
+    val_subset = val_df.groupby('sirna').apply(
+        lambda row: row.sample(config.test.num_val_samples_per_class))
     val_feature_dataset = ImageDataset(val_subset, train_controls,
                                        mode='val', config=config,
                                        num_ttas=num_ttas_for_val,
@@ -477,7 +480,9 @@ def inference(data_loader: Any, model: Any, func: Any, activation: Any = None) -
 def siamese_inference(train_feature_loader: Any, test_feature_loader: Any,
                       model: Any) -> np.array:
     ''' Returns predictions array. '''
+    logger.info('calculating features for the train')
     train_features = inference(train_feature_loader, model, 'features')
+    logger.info('calculating features for validation/test')
     test_features = inference(test_feature_loader, model, 'features')
 
     dataset = AllVsAllDataset(torch.tensor(train_features),
@@ -486,18 +491,23 @@ def siamese_inference(train_feature_loader: Any, test_feature_loader: Any,
     data_loader = torch.utils.data.DataLoader(
         dataset, batch_size=config.test.batch_size, shuffle=False,
         num_workers=config.general.num_workers)
+    logger.info('calculating distances')
     predicts = inference(data_loader, model, 'classifier', nn.Sigmoid())
 
-    # TODO: use both sites for every test sample
+    # TODO: use both sites for the test stage, one site for the validation stage
     # if config.model.num_sites == 2:
     #     sz = predicts.shape[0]
     #     predicts = np.mean(np.dstack([predicts[:sz], predicts[sz:]]), axis=-1)
 
     predicts = predicts.reshape(len(test_feature_loader.dataset),
                                 len(train_feature_loader.dataset))
+    dprint(predicts.shape)
     predicts = np.argmax(predicts, axis=1)
+    dprint(predicts.shape)
 
-    # FIXME: convert train sample indices to sirna indices here!!!
+    # convert train sample indices to sirna indices here
+    predicts = train_feature_loader.dataset.df.sirna.values[predicts]
+    dprint(predicts.shape)
 
     return predicts
 
