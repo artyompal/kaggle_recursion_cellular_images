@@ -309,7 +309,7 @@ def lr_finder(train_loader: Any, model: Any, criterion: Any, optimizer: Any) -> 
         set_lr(optimizer, lr)
 
         output = model(input_.cuda())
-        loss = criterion(output, target.cuda())
+        loss = criterion(output, target.cuda().float())
         loss_val = loss.data.item()
 
         predict = output.detach() > 0.5
@@ -319,7 +319,7 @@ def lr_finder(train_loader: Any, model: Any, criterion: Any, optimizer: Any) -> 
         loss.backward()
         optimizer.step()
 
-        lr_str = f'\tlr {lr:.08f}'
+        lr_str = f'\tlr {lr:.02e}'
 
         # compute the smoothed loss
         avg_loss = beta * avg_loss + (1 - beta) * loss_val

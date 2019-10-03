@@ -1,5 +1,6 @@
 __pycache__/
 data
+examples
 models
 debug_images*
 logs
